@@ -13,7 +13,7 @@
 | 항목 | 확정 내용 |
 |------|----------|
 | 1차 플랫폼 | Windows PC 프로그램 (Python 3 + PyQt) |
-| 프로젝트 경로 | `C:\Users\USER\Documents\dev\smartvoca\voca-flashcard` |
+| 프로젝트 경로 | `C:\Users\USER\Documents\dev\smartvoca` |
 | 단어 데이터 | 내용어 2,000개 (대명사·전치사·접속사·한정사 등 기능어 제외), Claude 생성 후 사용자 검토 |
 | 단어 데이터 형식 | UTF-8 CSV, 열: `번호,영단어,품사,뜻` |
 | 하루 단어 수 기본값 | 20개 (설정 변경 가능) |
