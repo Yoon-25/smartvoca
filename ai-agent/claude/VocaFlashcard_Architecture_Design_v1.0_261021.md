@@ -56,10 +56,12 @@
 
 ## 4. 프로젝트 폴더 구조
 
-명세서 기준 프로젝트 경로: `C:\Users\USER\Documents\dev\smartvoca\voca-flashcard`
+프로젝트 경로: `C:\Users\USER\Documents\dev\smartvoca` (2026-10-28 `voca-flashcard` 내용을 루트로 이동, 구조 정리)
 
 ```
-voca-flashcard/
+smartvoca/
+├── CLAUDE.md                      # 프로젝트 지침
+├── .gitignore
 ├── ai-agent/                      # Claude 작업 공간 (기존)
 ├── docs/                          # 확정 산출물 (기존)
 ├── data/                          # 단어장·이력·설정 (실행 시 사용)
