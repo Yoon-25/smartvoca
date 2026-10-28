@@ -1,8 +1,8 @@
 # 스마트 보카 아키텍처 설계서
 
-**파일 위치**: `ai-agent/claude/VocaFlashcard_Architecture_Design_v1.0_261021.md` (초안, 승인 후 `docs/`로 이동)
+**파일 위치**: `docs/VocaFlashcard_Architecture_Design_v1.0_261021.md` (승인, 2026-10-28)
 **작성일**: 2026-10-21
-**버전**: v1.0 (초안)
+**버전**: v1.0 (승인, 2026-10-28)
 **설명**: 프로그램의 계층, 모듈 구성, 기능 분해(Function Map), 모듈 간 인터페이스를 정의한다.
 **기준 문서**: `VocaFlashcard_Requirement_Spec_v1.1_261021.md` (이하 명세서), `VocaFlashcard_Decision_Records_v1.1_261021.md` (이하 ADR)
 
