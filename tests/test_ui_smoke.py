@@ -18,7 +18,7 @@ from src.models.settings import Settings  # noqa: E402
 from src.models.word import Word  # noqa: E402
 from src.storage.history_csv import read_records  # noqa: E402
 from src.storage.json_store import load_progress  # noqa: E402
-from src.ui.main_window import PAGE_MEMORIZE, MainWindow  # noqa: E402
+from src.ui.main_window import PAGE_HOME, MainWindow  # noqa: E402
 
 
 def make_words(count: int) -> list[Word]:
@@ -54,7 +54,7 @@ class MemorizeFlowTest(unittest.TestCase):
                 view._on_reveal()
                 view._on_next()
 
-        self.assertEqual(window._stack.currentIndex(), 0)
+        self.assertEqual(window._stack.currentIndex(), PAGE_HOME)
         self.assertIsNone(window._memorize_view)
         info.assert_called_once()
         self.assertEqual(len(read_records(self.history_path)), 3)
@@ -65,7 +65,7 @@ class MemorizeFlowTest(unittest.TestCase):
 
         window._start_memorize()
 
-        self.assertEqual(window._stack.currentIndex(), PAGE_MEMORIZE)
+        self.assertIs(window._stack.currentWidget(), window._memorize_view)
         self.assertEqual(window._memorize_view.session.day, 1)
 
     def test_REQ003_leaving_in_progress_session_asks_first(self):
@@ -79,12 +79,60 @@ class MemorizeFlowTest(unittest.TestCase):
 
         self.assertFalse(moved)
         question.assert_called_once()
-        self.assertEqual(window._stack.currentIndex(), PAGE_MEMORIZE)
+        self.assertIs(window._stack.currentWidget(), window._memorize_view)
 
     def test_REQ005_empty_word_list_disables_start(self):
         window = self.build_window([])
 
         self.assertFalse(window._start_button.isEnabled())
+
+
+class QuizFlowTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def setUp(self):
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp_dir.cleanup)
+        self.history_path = os.path.join(self._temp_dir.name, "study_history.csv")
+        self.progress_path = os.path.join(self._temp_dir.name, "progress.json")
+
+    def build_window(self) -> MainWindow:
+        words = make_words(5)
+        window = MainWindow(words, Settings(words_per_day=10), Progress(), self.progress_path, self.history_path)
+        self.addCleanup(window.deleteLater)
+        return window
+
+    def test_REQ004_quiz_runs_to_result_and_writes_quiz_history(self):
+        window = self.build_window()
+
+        window._on_quiz_start_requested(2, "한→영", ["단답형"])
+        view = window._quiz_view
+        self.assertEqual(len(view.session.questions), 2)
+        for _ in range(2):
+            view._submit(view.session.current.accepted[0])
+            view._on_primary()
+
+        self.assertTrue(view.session.is_finished)
+        self.assertFalse(view._result_panel.isHidden())
+        records = read_records(self.history_path)
+        self.assertEqual(len(records), 2)
+        self.assertEqual({record.correct for record in records}, {"O"})
+        self.assertEqual(len({record.session_id for record in records}), 1)
+
+    def test_REQ004_leaving_unfinished_quiz_asks_first(self):
+        window = self.build_window()
+        window._on_quiz_start_requested(2, "한→영", ["단답형"])
+        window._quiz_view._submit("틀린답")
+
+        with mock.patch.object(QtWidgets.QMessageBox, "question",
+                               return_value=QtWidgets.QMessageBox.StandardButton.No) as question:
+            moved = window._go_home()
+
+        self.assertFalse(moved)
+        question.assert_called_once()
 
 
 if __name__ == "__main__":

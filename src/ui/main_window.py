@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-04 - smartvoca - 메인 창: 상단 메뉴, 홈 화면, 화면 전환, 암기 완료 처리 (REQ-003, REQ-005, REQ-006)
+# 2026-11-04 - smartvoca - 메인 창: 메뉴, 홈, 암기·시험 흐름, 진행 중 이동 확인 (REQ-003~010)
 # 파일 위치: src/ui/main_window.py
 
-from datetime import date
+import random
+from datetime import date, datetime
 
 from PyQt6 import QtCore, QtWidgets
 
@@ -12,12 +13,19 @@ from src.models.settings import Settings
 from src.models.word import Word
 from src.services.day_planner import build_study_set, day_count, new_words_for_day
 from src.services.memorize_session import MemorizeSession, complete_day
+from src.services.quiz_builder import QuizOptions, build_quiz
+from src.services.quiz_session import QuizSession, new_session_id
+from src.services.stats import aggregate
 from src.storage.history_csv import read_records
 from src.storage.json_store import save_progress
 from src.ui.memorize_view import MemorizeView
+from src.ui.quiz_setup_view import QuizSetupView
+from src.ui.quiz_view import QuizView
 
 PAGE_HOME = 0
-PAGE_MEMORIZE = 1
+PAGE_QUIZ_SETUP = 1  # 암기·시험 진행 화면은 생성할 때마다 뒤에 추가된다
+
+LEAVE_CONFIRM_MESSAGE = "진행 중인 학습이 있습니다. 나가면 진행 상황이 사라집니다. 나가시겠습니까?"
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -32,6 +40,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._progress_path = progress_path
         self._history_path = history_path
         self._memorize_view: MemorizeView | None = None
+        self._quiz_view: QuizView | None = None
+        self._quiz_options: QuizOptions | None = None
 
         self.setWindowTitle("스마트 보카")
         self.resize(800, 560)
@@ -43,12 +53,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_ui(self):
         self._stack = QtWidgets.QStackedWidget()
         self._stack.addWidget(self._build_home())
+        self._setup_view = QuizSetupView(len(self._words), self._settings.default_question_count)
+        self._setup_view.start_requested.connect(self._on_quiz_start_requested)
+        self._setup_view.cancelled.connect(self._go_home)
+        self._stack.addWidget(self._setup_view)
         self.setCentralWidget(self._stack)
 
         self._menu_buttons = {}
         toolbar = self.addToolBar("메뉴")
         toolbar.setMovable(False)
-        for name, enabled in [("홈", True), ("단어장", False), ("암기", True), ("시험", False), ("보고서", False)]:
+        for name, enabled in [("홈", True), ("단어장", False), ("암기", True), ("시험", True), ("보고서", False)]:
             button = QtWidgets.QToolButton()
             button.setText(name if enabled else f"{name} (준비 중)")
             button.setEnabled(enabled)
@@ -69,12 +83,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._start_button = QtWidgets.QPushButton("암기 시작")
         self._start_button.clicked.connect(self._start_memorize)
+        quiz_button = QtWidgets.QPushButton("시험 보기")
+        quiz_button.clicked.connect(lambda: self._on_menu("시험"))
+
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addWidget(self._start_button)
+        buttons.addWidget(quiz_button)
 
         layout = QtWidgets.QVBoxLayout(page)
         layout.addWidget(QtWidgets.QLabel("오늘의 학습"))
         layout.addWidget(self._today_label)
         layout.addWidget(self._set_label)
-        layout.addWidget(self._start_button)
+        layout.addLayout(buttons)
         layout.addWidget(self._last_study_label)
         layout.addStretch()
         return page
@@ -109,9 +129,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._last_study_label.setText("아직 학습 기록 없음")
 
-        self._status_label.setText(
-            f"단어 {len(self._words):,}개 · 오늘 {day}일차 · 하루 {per_day}개"
-        )
+        self._status_label.setText(f"단어 {len(self._words):,}개 · 오늘 {day}일차 · 하루 {per_day}개")
 
     # ---------- 화면 전환 ----------
 
@@ -120,30 +138,38 @@ class MainWindow(QtWidgets.QMainWindow):
             self._go_home()
         elif name == "암기":
             self._start_memorize()
+        elif name == "시험":
+            self._open_quiz_setup()
 
     def _go_home(self) -> bool:
-        if not self._confirm_leave_memorize():
+        if not self._confirm_leave():
             return False
         self._remove_memorize_view()
+        self._remove_quiz_view()
         self._refresh_home()
         self._stack.setCurrentIndex(PAGE_HOME)
         return True
 
-    def _confirm_leave_memorize(self) -> bool:
-        """암기 진행 중이면 나가기 전에 확인한다 (UI 설계서 9장 메시지)."""
-        if self._memorize_view is None or not self._memorize_view.session.is_in_progress():
+    def _confirm_leave(self) -> bool:
+        """암기나 시험이 진행 중이면 나가기 전에 확인한다 (UI 설계서 1장, 9장)."""
+        if not self._is_in_progress():
             return True
-        answer = QtWidgets.QMessageBox.question(
-            self,
-            "확인",
-            "진행 중인 학습이 있습니다. 나가면 진행 상황이 사라집니다. 나가시겠습니까?",
-        )
+        answer = QtWidgets.QMessageBox.question(self, "확인", LEAVE_CONFIRM_MESSAGE)
         return answer == QtWidgets.QMessageBox.StandardButton.Yes
+
+    def _is_in_progress(self) -> bool:
+        memorizing = self._memorize_view is not None and self._memorize_view.session.is_in_progress()
+        quizzing = self._quiz_view is not None and self._quiz_in_progress(self._quiz_view.session)
+        return memorizing or quizzing
+
+    @staticmethod
+    def _quiz_in_progress(session: QuizSession) -> bool:
+        return not session.is_finished and (session.position > 0 or session.is_submitted)
 
     # ---------- 암기 ----------
 
     def _start_memorize(self):
-        if self._memorize_view is not None and not self._confirm_leave_memorize():
+        if not self._confirm_leave():
             return
         day = self._today_day()
         if day == 0:
@@ -161,6 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
         session = MemorizeSession.from_study_set(day, study)
 
         self._remove_memorize_view()
+        self._remove_quiz_view()
         self._memorize_view = MemorizeView(session, self._history_path)
         self._memorize_view.completed.connect(self._on_memorize_completed)
         self._stack.addWidget(self._memorize_view)
@@ -194,9 +221,52 @@ class MainWindow(QtWidgets.QMainWindow):
         self._memorize_view.deleteLater()
         self._memorize_view = None
 
+    # ---------- 시험 ----------
+
+    def _open_quiz_setup(self):
+        if not self._confirm_leave():
+            return
+        if not self._words:
+            QtWidgets.QMessageBox.information(self, "시험", "단어장이 비어 있어 시험을 시작할 수 없습니다.")
+            return
+        self._remove_memorize_view()
+        self._remove_quiz_view()
+        self._stack.setCurrentIndex(PAGE_QUIZ_SETUP)
+
+    def _on_quiz_start_requested(self, count: int, direction: str, types: list[str]):
+        self._quiz_options = QuizOptions(
+            count=count,
+            direction=direction,
+            question_types=types,
+            per_day=self._settings.words_per_day,
+            today=date.today(),
+        )
+        self._start_quiz()
+
+    def _start_quiz(self):
+        if self._quiz_options is None:
+            return
+        stats = aggregate(read_records(self._history_path))
+        questions = build_quiz(self._words, stats, self._quiz_options, random.Random())
+        session = QuizSession(session_id=new_session_id(datetime.now()), questions=questions)
+
+        self._remove_quiz_view()
+        self._quiz_view = QuizView(session, self._history_path)
+        self._quiz_view.go_home.connect(self._go_home)
+        self._quiz_view.retry.connect(self._start_quiz)
+        self._stack.addWidget(self._quiz_view)
+        self._stack.setCurrentWidget(self._quiz_view)
+
+    def _remove_quiz_view(self):
+        if self._quiz_view is None:
+            return
+        self._stack.removeWidget(self._quiz_view)
+        self._quiz_view.deleteLater()
+        self._quiz_view = None
+
     def closeEvent(self, event):
-        # 진행 중인 암기가 있으면 창 닫기도 확인한다
-        if self._confirm_leave_memorize():
+        # 진행 중인 학습이 있으면 창 닫기도 확인한다
+        if self._confirm_leave():
             event.accept()
         else:
             event.ignore()
