@@ -1,0 +1,5 @@
+# 줄바꿈: 저장소에는 LF로 보관하고, 작업 폴더에서는 Git이 자동 변환한다
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
