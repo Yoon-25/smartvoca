@@ -20,6 +20,7 @@ WORD_FILE = os.path.join(DATA_DIR, "voca_2000.csv")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
 HISTORY_FILE = os.path.join(DATA_DIR, "study_history.csv")
+REPORTS_DIR = os.path.join(DATA_DIR, "reports")
 
 SKIP_PREVIEW_COUNT = 5
 
@@ -34,7 +35,7 @@ def main() -> int:
     words = _load_word_list()
     progress = load_progress(PROGRESS_FILE)
 
-    window = MainWindow(words, settings_result.settings, progress, PROGRESS_FILE, HISTORY_FILE)
+    window = MainWindow(words, settings_result.settings, progress, PROGRESS_FILE, HISTORY_FILE, REPORTS_DIR)
     window.show()
     return app.exec()
 

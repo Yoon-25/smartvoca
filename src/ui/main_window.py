@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-04 - smartvoca - 메인 창: 메뉴, 홈, 암기·시험 흐름, 진행 중 이동 확인 (REQ-003~010)
+# 2026-11-18 - smartvoca - 메인 창: 메뉴, 홈, 암기·시험·보고서 흐름, 진행 중 이동 확인 (REQ-003~011)
 # 파일 위치: src/ui/main_window.py
 
+import os
 import random
 from datetime import date, datetime
 
@@ -16,11 +17,13 @@ from src.services.memorize_session import MemorizeSession, complete_day
 from src.services.quiz_builder import QuizOptions, build_quiz
 from src.services.quiz_session import QuizSession, new_session_id
 from src.services.stats import aggregate
-from src.storage.history_csv import read_records
+from src.services.report_builder import build_report, filter_period, save_report
+from src.storage.history_csv import read_history, read_records
 from src.storage.json_store import save_progress
 from src.ui.memorize_view import MemorizeView
 from src.ui.quiz_setup_view import QuizSetupView
 from src.ui.quiz_view import QuizView
+from src.ui.report_view import NO_HISTORY_MESSAGE, ReportView
 
 PAGE_HOME = 0
 PAGE_QUIZ_SETUP = 1  # 암기·시험 진행 화면은 생성할 때마다 뒤에 추가된다
@@ -32,13 +35,15 @@ class MainWindow(QtWidgets.QMainWindow):
     """메인 창. 가운데 영역은 QStackedWidget으로 화면을 바꾼다 (UI 설계서 1장)."""
 
     def __init__(self, words: list[Word], settings: Settings, progress: Progress,
-                 progress_path: str, history_path: str, parent=None):
+                 progress_path: str, history_path: str, reports_dir: str | None = None, parent=None):
         super().__init__(parent)
         self._words = words
         self._settings = settings
         self._progress = progress
         self._progress_path = progress_path
         self._history_path = history_path
+        # 보고서 폴더를 생략하면 이력 파일 옆의 reports 폴더를 쓴다 (데이터 설계서 8절)
+        self._reports_dir = reports_dir or os.path.join(os.path.dirname(os.path.abspath(history_path)), "reports")
         self._memorize_view: MemorizeView | None = None
         self._quiz_view: QuizView | None = None
         self._quiz_options: QuizOptions | None = None
@@ -57,12 +62,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._setup_view.start_requested.connect(self._on_quiz_start_requested)
         self._setup_view.cancelled.connect(self._go_home)
         self._stack.addWidget(self._setup_view)
+        self._report_view = ReportView()
+        self._report_view.generate_requested.connect(self._on_report_requested)
+        self._stack.addWidget(self._report_view)
         self.setCentralWidget(self._stack)
 
         self._menu_buttons = {}
         toolbar = self.addToolBar("메뉴")
         toolbar.setMovable(False)
-        for name, enabled in [("홈", True), ("단어장", False), ("암기", True), ("시험", True), ("보고서", False)]:
+        for name, enabled in [("홈", True), ("단어장", False), ("암기", True), ("시험", True), ("보고서", True)]:
             button = QtWidgets.QToolButton()
             button.setText(name if enabled else f"{name} (준비 중)")
             button.setEnabled(enabled)
@@ -140,6 +148,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._start_memorize()
         elif name == "시험":
             self._open_quiz_setup()
+        elif name == "보고서":
+            self._open_report()
 
     def _go_home(self) -> bool:
         if not self._confirm_leave():
@@ -232,6 +242,40 @@ class MainWindow(QtWidgets.QMainWindow):
         self._remove_memorize_view()
         self._remove_quiz_view()
         self._stack.setCurrentIndex(PAGE_QUIZ_SETUP)
+
+    # ---------- 보고서 ----------
+
+    def _open_report(self):
+        if not self._confirm_leave():
+            return
+        self._remove_memorize_view()
+        self._remove_quiz_view()
+        self._stack.setCurrentWidget(self._report_view)
+
+    def _on_report_requested(self, period_days):
+        view = self._report_view
+        today = date.today()
+        now = datetime.now()
+
+        loaded = read_history(self._history_path)
+        if not filter_period(loaded.records, period_days, today):
+            view.show_message(NO_HISTORY_MESSAGE)  # 이력이 없으면 파일을 만들지 않는다 (REQ-011)
+            return
+
+        text = build_report(
+            loaded.records,
+            period_days,
+            today,
+            now,
+            word_keys={word.key for word in self._words},
+            skipped=loaded.skipped,
+        )
+        try:
+            saved_path = save_report(text, self._reports_dir, now)
+        except OSError as error:
+            view.show_preview_only(text, str(error))
+            return
+        view.show_report(text, saved_path)
 
     def _on_quiz_start_requested(self, count: int, direction: str, types: list[str]):
         self._quiz_options = QuizOptions(

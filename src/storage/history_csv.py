@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-04 - smartvoca - 학습 이력 CSV 추가·읽기 (REQ-010)
+# 2026-11-04 - smartvoca - 학습 이력 CSV 추가·읽기, 무시한 행 수 집계 (REQ-010, REQ-011)
 # 파일 위치: src/storage/history_csv.py
 
 import csv
 import os
+from dataclasses import dataclass
 from datetime import datetime
 
 from src.models.history_record import ACTIVITY_MEMORIZE, ACTIVITY_QUIZ, HistoryRecord
@@ -42,20 +43,38 @@ def append_records(path: str, records: list[HistoryRecord]) -> None:
             ])
 
 
-def read_records(path: str) -> list[HistoryRecord]:
-    """이력을 읽는다. 파일이 없으면 빈 목록. 형식이 맞지 않는 행은 무시한다 (데이터 설계서 5.3절)."""
+@dataclass
+class HistoryLoad:
+    """이력 읽기 결과. skipped는 형식이 맞지 않아 무시한 행 수 (보고서 하단에 표시한다)."""
+
+    records: list[HistoryRecord]
+    skipped: int
+
+
+def read_history(path: str) -> HistoryLoad:
+    """이력을 읽고 무시한 행 수를 함께 돌려준다. 파일이 없으면 빈 결과."""
     if not os.path.exists(path):
-        return []
+        return HistoryLoad(records=[], skipped=0)
 
     records: list[HistoryRecord] = []
+    skipped = 0
     with open(path, encoding="utf-8-sig", newline="") as history_file:
         reader = csv.reader(history_file)
         next(reader, None)  # 헤더 행 건너뜀
         for row in reader:
+            if not row:
+                continue  # 빈 줄은 무시 개수에 넣지 않는다
             record = _parse_row(row)
-            if record is not None:
+            if record is None:
+                skipped += 1
+            else:
                 records.append(record)
-    return records
+    return HistoryLoad(records=records, skipped=skipped)
+
+
+def read_records(path: str) -> list[HistoryRecord]:
+    """이력을 읽는다. 파일이 없으면 빈 목록. 형식이 맞지 않는 행은 무시한다 (데이터 설계서 5.3절)."""
+    return read_history(path).records
 
 
 def _parse_row(row: list[str]) -> HistoryRecord | None:

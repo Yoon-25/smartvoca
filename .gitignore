@@ -14,6 +14,7 @@ node_modules/
 data/study_history.csv
 data/progress.json
 data/settings.json
+data/reports/
 
 # 에디터·OS 잡파일
 .idea/
