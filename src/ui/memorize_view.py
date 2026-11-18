@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-04 - smartvoca - 암기 화면: 카드 앞·뒷면, 이전·다음, 뜻 보기 (REQ-003)
+# 2026-11-18 - smartvoca - 암기 화면: 카드 앞·뒷면, 이전·다음, 뜻 보기, 단축 키 (REQ-003)
 # 파일 위치: src/ui/memorize_view.py
 
 from datetime import datetime
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from src.services.memorize_session import KIND_NEW, MemorizeSession
 from src.storage.history_csv import append_records
@@ -72,6 +72,16 @@ class MemorizeView(QtWidgets.QWidget):
         layout.addWidget(self._badge)
         layout.addLayout(navigation)
 
+        # 단축 키: 스페이스 = 뜻 보기, 좌·우 방향키 = 이전·다음 (UI 설계서 3장)
+        self._add_shortcut(QtCore.Qt.Key.Key_Space, self._on_space)
+        self._add_shortcut(QtCore.Qt.Key.Key_Left, self._on_previous_by_key)
+        self._add_shortcut(QtCore.Qt.Key.Key_Right, self._on_next_by_key)
+
+    def _add_shortcut(self, key: QtCore.Qt.Key, handler):
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence(key), self)
+        shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        shortcut.activated.connect(handler)
+
     @property
     def session(self) -> MemorizeSession:
         return self._session
@@ -108,6 +118,19 @@ class MemorizeView(QtWidgets.QWidget):
             except OSError as error:
                 QtWidgets.QMessageBox.warning(self, "저장 실패", f"암기 이력을 저장하지 못했습니다.\n{error}")
         self._refresh()
+
+    def _on_space(self):
+        if self._reveal_button.isEnabled():
+            self._on_reveal()
+
+    def _on_previous_by_key(self):
+        if self._previous_button.isEnabled():
+            self._on_previous()
+
+    def _on_next_by_key(self):
+        # 방향키로는 마지막 카드에서 완료 처리하지 않는다 (완료는 버튼으로만)
+        if self._next_button.isEnabled() and not self._session.is_last:
+            self._on_next()
 
     def _on_previous(self):
         self._session.previous()

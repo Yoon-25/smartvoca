@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-04 - smartvoca - 시험 화면: 문제 표시, 답 제출, 정답 표시, 결과 (REQ-004, REQ-009, REQ-010)
+# 2026-11-18 - smartvoca - 시험 화면: 문제 표시, 답 제출, 정답 표시, 결과, 숫자 키 선택 (REQ-004, REQ-009, REQ-010)
 # 파일 위치: src/ui/quiz_view.py
 
 from datetime import datetime
@@ -145,6 +145,18 @@ class QuizView(QtWidgets.QWidget):
         self._ox_false.setEnabled(enabled)
         for button in self._choice_buttons:
             button.setEnabled(enabled)
+
+    def keyPressEvent(self, event):
+        # 4지선다에서 1~4 숫자 키로 보기를 고른다 (UI 설계서 11장)
+        # 주관식 입력칸에서는 숫자가 그대로 입력되도록 입력칸이 먼저 받는다
+        number_keys = [int(QtCore.Qt.Key.Key_1) + offset for offset in range(4)]
+        if event.key() in number_keys and self._choice_buttons and self._choice_buttons[0].isEnabled():
+            index = number_keys.index(event.key())
+            if index < len(self._choice_buttons):
+                self._choice_buttons[index].setChecked(True)
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
     # ---------- 답 제출과 이동 ----------
 
