@@ -15,7 +15,7 @@ RESULT_CSV = os.path.join(BASE, "대조결과_261118.csv")
 OUT_CSV = os.path.join(BASE, "2차대조결과_261118.csv")
 
 POS_HEADERS = {"명사": "명사", "동사": "동사", "형용사": "형용사", "부사": "부사"}
-SENSE_LINE = re.compile(r"^#\s*(?!\*)(.+)$")
+SENSE_LINE = re.compile(r"^(?:#|\*\s*'''\d+\.''')\s*(?!\*)(.+)$")
 
 
 def clean(text: str) -> str:
