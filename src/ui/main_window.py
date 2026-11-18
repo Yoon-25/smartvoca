@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-18 - smartvoca - 메인 창: 메뉴, 홈, 암기·시험·보고서 흐름, 진행 중 이동 확인 (REQ-003~011)
+# 2026-11-18 - smartvoca - 메인 창: 메뉴, 홈, 단어장·암기·시험·보고서 흐름, 진행 중 이동 확인 (REQ-001~011)
 # 파일 위치: src/ui/main_window.py
 
 import os
@@ -24,6 +24,7 @@ from src.ui.memorize_view import MemorizeView
 from src.ui.quiz_setup_view import QuizSetupView
 from src.ui.quiz_view import QuizView
 from src.ui.report_view import NO_HISTORY_MESSAGE, ReportView
+from src.ui.word_list_view import WordListView
 
 PAGE_HOME = 0
 PAGE_QUIZ_SETUP = 1  # 암기·시험 진행 화면은 생성할 때마다 뒤에 추가된다
@@ -35,7 +36,8 @@ class MainWindow(QtWidgets.QMainWindow):
     """메인 창. 가운데 영역은 QStackedWidget으로 화면을 바꾼다 (UI 설계서 1장)."""
 
     def __init__(self, words: list[Word], settings: Settings, progress: Progress,
-                 progress_path: str, history_path: str, reports_dir: str | None = None, parent=None):
+                 progress_path: str, history_path: str, reports_dir: str | None = None,
+                 word_file_path: str = "", skipped: list | None = None, parent=None):
         super().__init__(parent)
         self._words = words
         self._settings = settings
@@ -44,6 +46,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._history_path = history_path
         # 보고서 폴더를 생략하면 이력 파일 옆의 reports 폴더를 쓴다 (데이터 설계서 8절)
         self._reports_dir = reports_dir or os.path.join(os.path.dirname(os.path.abspath(history_path)), "reports")
+        self._word_file_path = word_file_path
+        self._skipped = skipped or []
         self._memorize_view: MemorizeView | None = None
         self._quiz_view: QuizView | None = None
         self._quiz_options: QuizOptions | None = None
@@ -58,10 +62,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_ui(self):
         self._stack = QtWidgets.QStackedWidget()
         self._stack.addWidget(self._build_home())
-        self._setup_view = QuizSetupView(len(self._words), self._settings.default_question_count)
-        self._setup_view.start_requested.connect(self._on_quiz_start_requested)
-        self._setup_view.cancelled.connect(self._go_home)
+        self._setup_view = self._create_setup_view()
         self._stack.addWidget(self._setup_view)
+        self._word_list_view = WordListView(self._words, self._skipped, self._word_file_path)
+        self._word_list_view.words_loaded.connect(self._on_words_loaded)
+        self._stack.addWidget(self._word_list_view)
         self._report_view = ReportView()
         self._report_view.generate_requested.connect(self._on_report_requested)
         self._stack.addWidget(self._report_view)
@@ -70,7 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._menu_buttons = {}
         toolbar = self.addToolBar("메뉴")
         toolbar.setMovable(False)
-        for name, enabled in [("홈", True), ("단어장", False), ("암기", True), ("시험", True), ("보고서", True)]:
+        for name, enabled in [("홈", True), ("단어장", True), ("암기", True), ("시험", True), ("보고서", True)]:
             button = QtWidgets.QToolButton()
             button.setText(name if enabled else f"{name} (준비 중)")
             button.setEnabled(enabled)
@@ -150,6 +155,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._open_quiz_setup()
         elif name == "보고서":
             self._open_report()
+        elif name == "단어장":
+            self._open_word_list()
 
     def _go_home(self) -> bool:
         if not self._confirm_leave():
@@ -242,6 +249,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self._remove_memorize_view()
         self._remove_quiz_view()
         self._stack.setCurrentIndex(PAGE_QUIZ_SETUP)
+
+    # ---------- 단어장 ----------
+
+    def _open_word_list(self):
+        if not self._confirm_leave():
+            return
+        self._remove_memorize_view()
+        self._remove_quiz_view()
+        self._stack.setCurrentWidget(self._word_list_view)
+
+    def _on_words_loaded(self, words: list[Word], skipped: list, path: str):
+        """단어장을 불러오면 홈 요약과 시험 설정의 단어 수를 새 목록에 맞춘다."""
+        self._words = words
+        self._skipped = skipped
+        self._word_file_path = path
+        self._rebuild_setup_view()
+        self._refresh_home()
+
+    def _create_setup_view(self) -> QuizSetupView:
+        view = QuizSetupView(len(self._words), self._settings.default_question_count)
+        view.start_requested.connect(self._on_quiz_start_requested)
+        view.cancelled.connect(self._go_home)
+        return view
+
+    def _rebuild_setup_view(self):
+        index = self._stack.indexOf(self._setup_view)
+        self._stack.removeWidget(self._setup_view)
+        self._setup_view.deleteLater()
+        self._setup_view = self._create_setup_view()
+        self._stack.insertWidget(index, self._setup_view)
 
     # ---------- 보고서 ----------
 
