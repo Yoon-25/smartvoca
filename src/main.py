@@ -37,7 +37,7 @@ def main() -> int:
 
     window = MainWindow(
         words, settings_result.settings, progress, PROGRESS_FILE, HISTORY_FILE, REPORTS_DIR,
-        word_file_path=WORD_FILE, skipped=skipped,
+        word_file_path=WORD_FILE, skipped=skipped, settings_path=SETTINGS_FILE,
     )
     window.show()
     return app.exec()

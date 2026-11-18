@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 2026-11-18 - smartvoca - 메인 창: 메뉴, 홈, 단어장·암기·시험·보고서 흐름, 진행 중 이동 확인 (REQ-001~011)
+# 2026-11-18 - smartvoca - 메인 창: 메뉴, 홈, 단어장·암기·시험·보고서·설정 흐름, 진행 중 이동 확인 (REQ-001~011)
 # 파일 위치: src/ui/main_window.py
 
 import os
@@ -19,11 +19,12 @@ from src.services.quiz_session import QuizSession, new_session_id
 from src.services.stats import aggregate
 from src.services.report_builder import build_report, filter_period, save_report
 from src.storage.history_csv import read_history, read_records
-from src.storage.json_store import save_progress
+from src.storage.json_store import save_progress, save_settings
 from src.ui.memorize_view import MemorizeView
 from src.ui.quiz_setup_view import QuizSetupView
 from src.ui.quiz_view import QuizView
 from src.ui.report_view import NO_HISTORY_MESSAGE, ReportView
+from src.ui.settings_dialog import SettingsDialog
 from src.ui.word_list_view import WordListView
 
 PAGE_HOME = 0
@@ -37,7 +38,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, words: list[Word], settings: Settings, progress: Progress,
                  progress_path: str, history_path: str, reports_dir: str | None = None,
-                 word_file_path: str = "", skipped: list | None = None, parent=None):
+                 word_file_path: str = "", skipped: list | None = None,
+                 settings_path: str | None = None, parent=None):
         super().__init__(parent)
         self._words = words
         self._settings = settings
@@ -47,6 +49,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # 보고서 폴더를 생략하면 이력 파일 옆의 reports 폴더를 쓴다 (데이터 설계서 8절)
         self._reports_dir = reports_dir or os.path.join(os.path.dirname(os.path.abspath(history_path)), "reports")
         self._word_file_path = word_file_path
+        # 설정 파일을 생략하면 이력 파일 옆의 settings.json을 쓴다
+        self._settings_path = settings_path or os.path.join(os.path.dirname(os.path.abspath(history_path)), "settings.json")
         self._skipped = skipped or []
         self._memorize_view: MemorizeView | None = None
         self._quiz_view: QuizView | None = None
@@ -82,6 +86,14 @@ class MainWindow(QtWidgets.QMainWindow):
             button.clicked.connect(lambda _checked=False, n=name: self._on_menu(n))
             toolbar.addWidget(button)
             self._menu_buttons[name] = button
+
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+        settings_button = QtWidgets.QToolButton()
+        settings_button.setText("설정 ⚙")
+        settings_button.clicked.connect(self._open_settings)
+        toolbar.addWidget(settings_button)
 
         self._status_label = QtWidgets.QLabel()
         self.statusBar().addPermanentWidget(self._status_label)
@@ -279,6 +291,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self._setup_view.deleteLater()
         self._setup_view = self._create_setup_view()
         self._stack.insertWidget(index, self._setup_view)
+
+    # ---------- 설정 ----------
+
+    def _open_settings(self):
+        # 진행 중인 암기·시험은 시작할 때의 설정으로 만들어졌으므로 끝난 뒤에 바꾼다
+        if self._is_in_progress():
+            QtWidgets.QMessageBox.information(self, "설정", "진행 중인 학습을 끝낸 뒤 설정을 바꿔 주세요.")
+            return
+
+        dialog = SettingsDialog(self._settings, len(self._words), self)
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+
+        new_settings = dialog.result_settings()
+        try:
+            save_settings(self._settings_path, new_settings)
+        except OSError as error:
+            QtWidgets.QMessageBox.warning(
+                self, "저장 실패", f"설정을 저장하지 못했습니다. 기존 설정은 그대로 있습니다.\n(원인: {error})"
+            )
+            return
+
+        self._settings = new_settings
+        self._rebuild_setup_view()
+        self._refresh_home()
 
     # ---------- 보고서 ----------
 
