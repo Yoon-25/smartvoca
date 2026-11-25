@@ -4,23 +4,14 @@
 # 파일 위치: src/main.py
 # 실행: 프로젝트 루트에서 `python -m src.main`
 
-import os
 import sys
 
 from PyQt6 import QtWidgets
 
+from src.paths import HISTORY_FILE, PROGRESS_FILE, REPORTS_DIR, SETTINGS_FILE, WORD_FILE
 from src.storage.json_store import load_progress, load_settings
 from src.storage.word_csv import WordFileError, load_words
 from src.ui.main_window import MainWindow
-
-# 경로 상수는 이 파일에만 둔다 (아키텍처 설계서 6.3절)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-WORD_FILE = os.path.join(DATA_DIR, "voca_2000.csv")
-SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
-PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
-HISTORY_FILE = os.path.join(DATA_DIR, "study_history.csv")
-REPORTS_DIR = os.path.join(DATA_DIR, "reports")
 
 SKIP_PREVIEW_COUNT = 5
 
