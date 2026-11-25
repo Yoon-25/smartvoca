@@ -30,3 +30,6 @@ Thumbs.db
 desktop.ini
 ai-agent/claude/261118_ui점검/shots/
 ai-agent/claude/251125_웹디자인/shots/
+
+# 사전 원문 추출 결과 (CC BY-SA 자료, 라이선스 결정 전까지 커밋하지 않음, 이슈 #11)
+ai-agent/claude/251125_사전재확인/ko_defs62.json
