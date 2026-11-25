@@ -62,7 +62,8 @@ class HomeAndWordsTest(WebTestBase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         text = response.get_data(as_text=True)
-        self.assertIn("1일차 (단어 1 ~ 10)", text)
+        self.assertIn("1일차", text)
+        self.assertIn("단어 1 ~ 10", text)
 
     def test_REQ002_words_page_filters_by_english_or_meaning(self):
         response = self.client.get("/words?q=고양이")

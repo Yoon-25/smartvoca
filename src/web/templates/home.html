@@ -7,31 +7,39 @@
   <div class="flash info">{{ warning }}</div>
 {% endfor %}
 
-<div class="card">
-  <p class="muted">오늘의 학습</p>
+<section class="card hero">
+  <p class="eyebrow">오늘의 학습</p>
   {% if info.day == 0 %}
-    <p><strong>단어장이 비어 있습니다.</strong></p>
+    <p class="day">단어장이 비어 있습니다</p>
+    <p class="range">단어장 파일을 확인한 뒤 다시 실행하세요.</p>
   {% else %}
-    <p style="font-size:20px; font-weight:bold;">
-      {{ info.day }}일차 (단어 {{ info.new_words[0].index + 1 }} ~ {{ info.new_words[-1].index + 1 }})
-    </p>
-    <p class="muted">신규 {{ info.new_words|length }}개 · 복습은 암기 시작 시 계산됩니다.</p>
-  {% endif %}
-  <p class="muted">
-    {% if info.last_study %}마지막 학습: {{ info.last_study.isoformat() }}{% else %}아직 학습 기록 없음{% endif %}
-  </p>
-
-  <div class="row">
-    {% if info.day == 0 %}
-      <button disabled>암기 시작</button>
-    {% else %}
+    <p class="day">{{ info.day }}일차</p>
+    <p class="range">단어 {{ info.new_words[0].index + 1 }} ~ {{ info.new_words[-1].index + 1 }} · 신규 {{ info.new_words|length }}개</p>
+    <div class="actions left">
       <form method="post" action="{{ url_for('memorize_start') }}"
             {% if info.memorize_in_progress %}onsubmit="return confirm('진행 중인 암기가 있습니다. 새로 시작하면 기존 진행 상황이 사라집니다. 계속할까요?');"{% endif %}>
         <button type="submit">암기 시작</button>
       </form>
-    {% endif %}
-    <a class="button secondary" href="{{ url_for('quiz_setup_page') }}">시험 보기</a>
+      <a class="button ghost" href="{{ url_for('quiz_setup_page') }}">시험 보기</a>
+    </div>
+  {% endif %}
+  <p class="muted-light">
+    {% if info.last_study %}마지막 학습 {{ info.last_study.isoformat() }}{% else %}아직 학습 기록이 없습니다{% endif %}
+  </p>
+</section>
+
+<div class="stats">
+  <div class="stat">
+    <div class="label">하루 학습량</div>
+    <div class="value">{{ info.per_day }}개</div>
   </div>
-  <p class="muted">단어 {{ info.total_words }}개 · 하루 {{ info.per_day }}개</p>
+  <div class="stat">
+    <div class="label">전체 단어</div>
+    <div class="value">{{ "{:,}".format(info.total_words) }}개</div>
+  </div>
+  <div class="stat">
+    <div class="label">마지막 학습</div>
+    <div class="value">{{ info.last_study.isoformat() if info.last_study else "없음" }}</div>
+  </div>
 </div>
 {% endblock %}

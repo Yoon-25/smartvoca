@@ -253,8 +253,9 @@ def _parse_float(raw: str | None, label: str) -> float:
 def _settings_form_values(settings: Settings) -> dict:
     return {
         "words_per_day": settings.words_per_day,
-        "prev_review_percent": round(settings.prev_review_ratio * 100, 2),
-        "wrong_review_percent": round(settings.wrong_review_ratio * 100, 2),
+        # :g 로 쓰면 20.0 대신 20, 12.5 는 12.5 로 보인다
+        "prev_review_percent": f"{settings.prev_review_ratio * 100:g}",
+        "wrong_review_percent": f"{settings.wrong_review_ratio * 100:g}",
         "default_question_count": settings.default_question_count,
     }
 

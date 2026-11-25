@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 {% if session is none %}
-  <div class="card">
-    <p>진행 중인 암기가 없습니다.</p>
+  <h1 class="page-title">암기</h1>
+  <p class="page-sub">오늘의 단어를 카드로 외워 봅니다.</p>
+  <div class="card empty">
     {% if info.day == 0 %}
-      <p class="muted">단어장이 비어 있습니다.</p>
+      <p>단어장이 비어 있습니다.</p>
     {% else %}
+      <p>진행 중인 암기가 없습니다.</p>
       <form method="post" action="{{ url_for('memorize_start') }}">
         <button type="submit">{{ info.day }}일차 암기 시작</button>
       </form>
@@ -13,41 +15,53 @@
   </div>
 {% else %}
   {% set card = session.current %}
-  <div class="card">
-    <div class="row">
-      <strong>{{ session.day }}일차 암기</strong>
-      <span class="muted">{% if card %}카드 {{ session.position + 1 }} / {{ session.cards|length }}{% else %}카드 없음{% endif %}</span>
+  {% set total = session.cards|length %}
+  <div class="head-row">
+    <div>
+      <h1 class="page-title">{{ session.day }}일차 암기</h1>
+      <p class="page-sub" style="margin-bottom:0;">{% if card %}카드 {{ session.position + 1 }} / {{ total }}{% else %}카드 없음{% endif %}</p>
     </div>
+  </div>
 
-    {% if card is none %}
-      <p class="center">이 일차에 암기할 단어가 없습니다.</p>
-      <form method="post" action="{{ url_for('memorize_abandon') }}" class="center">
+  {% if card is none %}
+    <div class="card empty">
+      <p>이 일차에 암기할 단어가 없습니다.</p>
+      <form method="post" action="{{ url_for('memorize_abandon') }}">
         <button type="submit" class="secondary">나가기</button>
       </form>
-    {% else %}
-      {% set revealed = session.is_revealed() %}
-      <div class="big">{{ card.word.english }}</div>
-      <div class="meaning">{{ card.word.meanings|join('  ·  ') if revealed else '' }}</div>
-      <p class="center muted">{% if card.kind != '신규' %}[{{ card.kind }}]{% endif %}</p>
+    </div>
+  {% else %}
+    <div class="progress"><span style="width: {{ ((session.position + 1) / total * 100)|round|int }}%;"></span></div>
 
-      <div class="row">
+    <div class="card">
+      <div class="flashcard">
+        {% if card.kind != '신규' %}<span class="pill review" style="margin-bottom:14px;">{{ card.kind }}</span>{% endif %}
+        {% set revealed = session.is_revealed() %}
+        <p class="big">{{ card.word.english }}</p>
+        <p class="meaning {{ '' if revealed else 'hidden' }}">{{ card.word.meanings|join('  ·  ') if revealed else '뜻을 보려면 아래 버튼을 누르세요' }}</p>
+      </div>
+
+      <div class="actions">
         <form method="post" action="{{ url_for('memorize_previous') }}" id="prev-form">
           <button type="submit" class="secondary" {% if session.is_first %}disabled{% endif %}>← 이전</button>
         </form>
         <form method="post" action="{{ url_for('memorize_reveal') }}" id="reveal-form">
-          <button type="submit" {% if revealed %}disabled{% endif %}>뜻 보기 (스페이스)</button>
+          <button type="submit" {% if revealed %}disabled{% endif %}>뜻 보기</button>
         </form>
         <form method="post" action="{{ url_for('memorize_next') }}" id="next-form">
           <button type="submit">{% if session.is_last %}완료{% else %}다음 →{% endif %}</button>
         </form>
       </div>
-      <p class="muted center">단축 키: 스페이스 = 뜻 보기, ← → = 이전·다음 (마지막 카드의 완료는 버튼으로만)</p>
-    {% endif %}
+      <p class="muted center" style="margin:18px 0 0;">단축 키: 스페이스 뜻 보기 · ← → 이전·다음 (마지막 카드의 완료는 버튼으로만)</p>
+    </div>
+  {% endif %}
+
+  <div class="leave">
+    <form method="post" action="{{ url_for('memorize_abandon') }}"
+          onsubmit="return confirm('암기를 그만두면 진행 상황이 사라집니다. 계속할까요? (진도는 바뀌지 않습니다)');">
+      <button type="submit" class="danger">암기 그만두기</button>
+    </form>
   </div>
-  <form method="post" action="{{ url_for('memorize_abandon') }}" class="center"
-        onsubmit="return confirm('암기를 그만두면 진행 상황이 사라집니다. 계속할까요? (진도는 바뀌지 않습니다)');">
-    <button type="submit" class="danger">암기 그만두기</button>
-  </form>
 {% endif %}
 {% endblock %}
 
