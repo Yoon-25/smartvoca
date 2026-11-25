@@ -1,22 +1,73 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="page-title">단어장</h1>
-<p class="page-sub">{{ word_file }} · 전체 {{ "{:,}".format(total) }}개 (웹에서는 읽기 전용)</p>
+<p class="page-sub">{{ word_file }} · 전체 {{ "{:,}".format(total) }}개</p>
 
 {% if load_error %}<div class="flash error">{{ load_error }}</div>{% endif %}
+{% if in_progress %}
+  <div class="flash info">진행 중인 암기·시험이 있어 단어를 바꿀 수 없습니다. 학습을 끝낸 뒤 편집하세요.</div>
+{% endif %}
+
+<div class="card">
+  <div class="toolbar">
+    <a class="button btn-sm" href="{{ url_for('word_new_page') }}" {% if in_progress %}style="pointer-events:none;opacity:.5;"{% endif %}>+ 단어 추가</a>
+    <form method="post" action="{{ url_for('words_save') }}">
+      {% if save_warnings %}
+        <label class="option" style="font-size:13px;"><input type="checkbox" name="confirm_change" value="1"> 안내를 확인했습니다</label>
+      {% endif %}
+      <button type="submit" class="btn-sm" {% if not word_dirty or in_progress %}disabled{% endif %}>변경 저장</button>
+    </form>
+    <form method="post" action="{{ url_for('words_discard') }}"
+          onsubmit="return {{ 'true' if not word_dirty else 'confirm(\'저장하지 않은 변경을 버리고 파일 내용으로 되돌릴까요?\')' }};">
+      <input type="hidden" name="confirm_discard" value="1">
+      <button type="submit" class="secondary btn-sm" {% if not word_dirty or in_progress %}disabled{% endif %}>변경 취소</button>
+    </form>
+  </div>
+
+  {% if save_warnings and word_dirty %}
+    <ul class="note-list">
+      {% for note in save_warnings %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('words_import') }}" enctype="multipart/form-data" class="toolbar" style="margin-bottom:0;">
+    <input type="file" name="file" accept=".csv,text/csv" {% if in_progress %}disabled{% endif %}>
+    <button type="submit" class="secondary btn-sm" {% if in_progress %}disabled{% endif %}>CSV 불러오기 (초안)</button>
+    {% if word_dirty %}
+      <label class="option" style="font-size:13px;"><input type="checkbox" name="confirm_discard" value="1"> 저장하지 않은 변경이 사라진다는 것을 확인</label>
+    {% endif %}
+  </form>
+  <p class="muted" style="margin:6px 0 0;">불러온 파일은 초안으로만 들어갑니다. "변경 저장"을 눌러야 단어장 파일에 반영되며, 직전 파일은 .bak으로 남습니다.</p>
+</div>
 
 <div class="card">
   <form method="get" action="{{ url_for('words_page') }}" class="search">
     <input type="text" name="q" value="{{ query }}" placeholder="영단어 또는 뜻으로 검색">
-    <button type="submit">검색</button>
+    <button type="submit" class="secondary">검색</button>
   </form>
   <p class="muted" style="margin:0 0 10px;">{% if query %}검색 결과 {{ words|length }}개{% else %}{{ words|length }}개 표시{% endif %}</p>
   {% if words %}
   <table>
-    <thead><tr><th>번호</th><th>영단어</th><th>품사</th><th>뜻</th></tr></thead>
+    <thead><tr><th>번호</th><th>영단어</th><th>품사</th><th>뜻</th><th></th></tr></thead>
     <tbody>
     {% for word in words %}
-      <tr><td class="num">{{ word.index + 1 }}</td><td class="en">{{ word.english }}</td><td class="pos">{{ word.pos }}</td><td>{{ word.meanings|join(' / ') }}</td></tr>
+      <tr>
+        <td class="num">{{ word.index + 1 }}</td>
+        <td class="en">{{ word.english }}</td>
+        <td class="pos">{{ word.pos }}</td>
+        <td>{{ word.meanings|join(' / ') }}</td>
+        <td class="actions-cell">
+          {% if not in_progress %}
+          <div class="row-actions">
+            <a class="button secondary btn-sm" href="{{ url_for('word_edit_page', key=word.key) }}">수정</a>
+            <form method="post" action="{{ url_for('word_delete', key=word.key) }}"
+                  onsubmit="return confirm('{{ word.english }} 를 삭제할까요? 저장하기 전까지 파일은 바뀌지 않습니다.');">
+              <button type="submit" class="danger btn-sm">삭제</button>
+            </form>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
@@ -28,7 +79,7 @@
 {% if skipped %}
 <div class="card">
   <h3>건너뛴 행 ({{ skipped|length }}개)</h3>
-  <p class="muted">단어장 파일의 이 줄들은 형식 문제로 읽지 않았습니다.</p>
+  <p class="muted">이 줄들은 형식 문제로 읽지 않았습니다. 저장하면 파일에서 사라지므로 필요하면 .bak 파일이나 원본에서 고치세요.</p>
   <table>
     <thead><tr><th>줄 번호</th><th>사유</th></tr></thead>
     <tbody>

@@ -29,7 +29,16 @@ from src.services.report_builder import build_report, filter_period, save_report
 from src.services.stats import aggregate
 from src.storage.history_csv import append_records, read_history, read_records
 from src.storage.json_store import load_progress, load_settings, save_progress, save_settings
-from src.storage.word_csv import WordFileError, load_words
+from src.services.word_editor import (
+    WordInput,
+    add_word,
+    day_layout_changed,
+    delete_word,
+    find_word,
+    update_word,
+    validate_word_input,
+)
+from src.storage.word_csv import WordFileError, load_words, save_words_with_backup
 
 NO_HISTORY_MESSAGE = "이력이 없습니다. 암기나 시험을 한 뒤 다시 시도하세요."
 VALID_DIRECTIONS = (DIRECTION_KO_EN, DIRECTION_EN_KO, DIRECTION_MIXED)
@@ -86,6 +95,9 @@ class StudyController:
         self._quiz: QuizSession | None = None
         self._quiz_options: QuizOptions | None = None
         self._last_result: GradeResult | None = None
+        # 저장된 파일의 단어 키 순서. 초안과 비교해 일차 구성이 바뀌는지 판정한다 (ADR-013)
+        self._saved_keys = [word.key for word in words]
+        self._dirty = False  # 초안(메모리)에 저장하지 않은 변경이 있는지
         self._lock = threading.RLock()
 
     @classmethod
@@ -115,6 +127,14 @@ class StudyController:
     @property
     def skipped(self) -> list:
         return self._skipped
+
+    @property
+    def word_dirty(self) -> bool:
+        return self._dirty
+
+    @property
+    def word_file(self) -> str:
+        return self._paths.word_file
 
     @property
     def settings(self) -> Settings:
@@ -280,6 +300,89 @@ class StudyController:
         with self._lock:
             self._quiz = None
             self._last_result = None
+
+    # ---------- 단어장 편집 (ADR-013) ----------
+    # 편집은 메모리의 초안에서 한다. 저장 버튼을 눌러야 파일에 쓴다.
+
+    def _ensure_words_editable(self) -> None:
+        if self.in_progress():
+            raise RuntimeError("진행 중인 학습을 끝낸 뒤 단어를 바꿔 주세요.")
+
+    def add_word(self, data: WordInput) -> None:
+        with self._lock:
+            self._ensure_words_editable()
+            errors = validate_word_input(data, self._words)
+            if errors:
+                raise ValueError(" ".join(errors))
+            self._words = add_word(self._words, data)
+            self._dirty = True
+
+    def update_word(self, key: str, data: WordInput) -> None:
+        with self._lock:
+            self._ensure_words_editable()
+            if find_word(self._words, key) is None:
+                raise ValueError("단어를 찾을 수 없습니다.")
+            errors = validate_word_input(data, self._words, editing_key=key)
+            if errors:
+                raise ValueError(" ".join(errors))
+            self._words = update_word(self._words, key, data)
+            self._dirty = True
+
+    def delete_word(self, key: str) -> None:
+        with self._lock:
+            self._ensure_words_editable()
+            if find_word(self._words, key) is None:
+                raise ValueError("단어를 찾을 수 없습니다.")
+            self._words = delete_word(self._words, key)
+            self._dirty = True
+
+    def word_save_warnings(self) -> list[str]:
+        """저장 전에 확인받을 사항. 비어 있으면 바로 저장해도 된다."""
+        with self._lock:
+            warnings = []
+            if day_layout_changed(self._saved_keys, self._words):
+                warnings.append("단어 순서나 개수가 바뀌어 일차 구성이 달라집니다. 진도(현재 일차)는 그대로 유지됩니다.")
+            if self._skipped:
+                warnings.append(f"건너뛴 행 {len(self._skipped)}개는 저장하면 파일에서 사라집니다. 직전 파일은 .bak으로 남습니다.")
+            return warnings
+
+    def save_words(self, confirm: bool) -> str | None:
+        """초안을 단어장 파일에 저장한다. 확인이 필요하면 확인 체크 없이는 저장하지 않는다."""
+        with self._lock:
+            self._ensure_words_editable()
+            warnings = self.word_save_warnings()
+            if warnings and not confirm:
+                raise ValueError(" ".join(warnings))
+            backup = save_words_with_backup(self._paths.word_file, self._words)
+            self._saved_keys = [word.key for word in self._words]
+            self._skipped = []
+            self._dirty = False
+            return backup
+
+    def discard_word_changes(self) -> None:
+        """저장하지 않은 초안을 버리고 파일에서 다시 읽는다."""
+        with self._lock:
+            self._ensure_words_editable()
+            self._reload_from(self._paths.word_file)
+
+    def import_words(self, path: str) -> None:
+        """다른 CSV를 초안으로 읽는다. 파일에 저장하기 전까지는 바뀌지 않는다."""
+        with self._lock:
+            self._ensure_words_editable()
+            try:
+                result = load_words(path)
+            except WordFileError as error:
+                raise ValueError(f"단어장 형식이 맞지 않습니다: {error}") from error
+            self._words = result.words
+            self._skipped = result.skipped
+            self._dirty = True
+
+    def _reload_from(self, path: str) -> None:
+        result = load_words(path)
+        self._words = result.words
+        self._skipped = result.skipped
+        self._saved_keys = [word.key for word in self._words]
+        self._dirty = False
 
     # ---------- 설정 ----------
 

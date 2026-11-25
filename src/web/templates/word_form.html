@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{{ '단어 수정' if word else '단어 추가' }}</h1>
+<p class="page-sub">{{ '저장하지 않은 초안에서 고칩니다. 단어장 화면에서 "변경 저장"을 눌러야 파일에 반영됩니다.' if word else '맨 뒤에 추가됩니다. 단어장 화면에서 "변경 저장"을 눌러야 파일에 반영됩니다.' }}</p>
+
+{% if errors %}
+  <div class="errors"><ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<form method="post" action="{{ action }}" class="card">
+  <div class="field">
+    <label class="title" for="english">영단어</label>
+    <input type="text" id="english" name="english" value="{{ form.english }}" required autofocus autocomplete="off" style="max-width:320px;">
+    <span class="hint">같은 단어(대소문자 무시)는 한 번만 넣을 수 있습니다.</span>
+  </div>
+  <div class="field">
+    <label class="title" for="pos">품사</label>
+    <select id="pos" name="pos" style="max-width:200px;">
+      {% for option in ['명사', '동사', '형용사', '부사'] %}
+        <option value="{{ option }}" {% if form.pos == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label class="title" for="meanings">뜻</label>
+    <input type="text" id="meanings" name="meanings" value="{{ form.meanings }}" required style="max-width:420px;">
+    <span class="hint">여러 뜻은 '/'로 나눠 입력합니다. 예: 해 / 연도</span>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="{{ url_for('words_page') }}">취소</a>
+    <button type="submit">{{ '수정 내용 반영' if word else '추가' }}</button>
+  </div>
+</form>
+{% endblock %}

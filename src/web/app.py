@@ -3,14 +3,18 @@
 # 2026-11-25 - smartvoca - Flask 앱: 라우트와 입력 검사, 화면은 Jinja 템플릿에 맡김 (REQ-001~011, 웹 버전)
 # 파일 위치: src/web/app.py
 
+import os
 import secrets
+import tempfile
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from src.models.settings import Settings
+from src.services.word_editor import WordInput
 from src.services.quiz_builder import TYPE_CHOICE, TYPE_OX, TYPE_SHORT, DIRECTION_EN_KO, DIRECTION_KO_EN, DIRECTION_MIXED
 from src.services.report_builder import PERIOD_7_DAYS, PERIOD_30_DAYS, PERIOD_ALL, PERIOD_LABELS
 from src.storage.json_store import QUESTION_COUNT_MIN, RATIO_RANGE, WORDS_PER_DAY_RANGE
+from src.storage.word_csv import WordFileError
 from src.web.controller import StudyController, WebPaths
 
 # 설정 화면은 비율을 %로 보여 준다 (설정 파일은 0~0.5 소수)
@@ -34,7 +38,7 @@ def create_app(paths: WebPaths, controller: StudyController | None = None) -> Fl
 
     @app.context_processor
     def inject_common():
-        return {"in_progress": ctrl.in_progress()}
+        return {"in_progress": ctrl.in_progress(), "word_dirty": ctrl.word_dirty}
 
     # ---------- 홈 ----------
 
@@ -176,9 +180,114 @@ def create_app(paths: WebPaths, controller: StudyController | None = None) -> Fl
             query=request.args.get("q", "").strip(),
             total=len(ctrl.words),
             skipped=ctrl.skipped,
-            word_file=paths.word_file,
+            word_file=ctrl.word_file,
             load_error=ctrl.load_error,
+            save_warnings=ctrl.word_save_warnings(),
         )
+
+    @app.get("/words/new")
+    def word_new_page():
+        return render_template("word_form.html", word=None, form=_empty_form(), errors=[], action=url_for("word_create"))
+
+    @app.post("/words/new")
+    def word_create():
+        data = _word_input_from_form(request.form)
+        try:
+            ctrl.add_word(data)
+        except (ValueError, RuntimeError) as error:
+            return render_template("word_form.html", word=None, form=request.form, errors=[str(error)],
+                                   action=url_for("word_create"))
+        flash("단어를 추가했습니다. 저장해야 파일에 반영됩니다.", "success")
+        return redirect(url_for("words_page"))
+
+    @app.get("/words/<path:key>/edit")
+    def word_edit_page(key: str):
+        word = _find_word_or_none(ctrl, key)
+        if word is None:
+            flash("단어를 찾을 수 없습니다.", "error")
+            return redirect(url_for("words_page"))
+        return render_template("word_form.html", word=word, form=_form_from_word(word), errors=[],
+                               action=url_for("word_update", key=key))
+
+    @app.post("/words/<path:key>/edit")
+    def word_update(key: str):
+        data = _word_input_from_form(request.form)
+        try:
+            ctrl.update_word(key, data)
+        except (ValueError, RuntimeError) as error:
+            word = _find_word_or_none(ctrl, key)
+            return render_template("word_form.html", word=word, form=request.form, errors=[str(error)],
+                                   action=url_for("word_update", key=key))
+        flash("단어를 고쳤습니다. 저장해야 파일에 반영됩니다.", "success")
+        return redirect(url_for("words_page"))
+
+    @app.post("/words/<path:key>/delete")
+    def word_delete(key: str):
+        try:
+            ctrl.delete_word(key)
+            flash("단어를 삭제했습니다. 저장해야 파일에 반영됩니다.", "success")
+        except (ValueError, RuntimeError) as error:
+            flash(str(error), "error")
+        return redirect(url_for("words_page"))
+
+    @app.post("/words/save")
+    def words_save():
+        confirm = bool(request.form.get("confirm_change"))
+        try:
+            backup = ctrl.save_words(confirm=confirm)
+        except ValueError as error:
+            flash(f"{error} 확인 체크 후 다시 저장하세요.", "error")
+            return redirect(url_for("words_page"))
+        except RuntimeError as error:
+            flash(str(error), "error")
+            return redirect(url_for("words_page"))
+        except OSError as error:
+            flash(f"파일을 저장하지 못했습니다. 기존 파일은 그대로 있습니다. (원인: {error})", "error")
+            return redirect(url_for("words_page"))
+        message = "단어장을 저장했습니다."
+        if backup:
+            message += f" 직전 파일은 {backup}에 남겼습니다."
+        flash(message, "success")
+        return redirect(url_for("words_page"))
+
+    @app.post("/words/discard")
+    def words_discard():
+        if ctrl.word_dirty and not request.form.get("confirm_discard"):
+            flash("저장하지 않은 변경이 사라집니다. 확인 체크 후 다시 시도하세요.", "error")
+            return redirect(url_for("words_page"))
+        try:
+            ctrl.discard_word_changes()
+        except (RuntimeError, OSError, WordFileError) as error:
+            flash(f"파일을 다시 읽지 못했습니다. ({error})", "error")
+            return redirect(url_for("words_page"))
+        flash("저장하지 않은 변경을 버리고 파일 내용으로 되돌렸습니다.", "info")
+        return redirect(url_for("words_page"))
+
+    @app.post("/words/import")
+    def words_import():
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            flash("불러올 CSV 파일을 선택하세요.", "error")
+            return redirect(url_for("words_page"))
+        if ctrl.word_dirty and not request.form.get("confirm_discard"):
+            flash("저장하지 않은 변경이 사라집니다. 확인 체크 후 다시 불러오세요.", "error")
+            return redirect(url_for("words_page"))
+        fd, temp_path = tempfile.mkstemp(suffix=".csv")
+        try:
+            with os.fdopen(fd, "wb") as temp_file:
+                upload.save(temp_file)
+            ctrl.import_words(temp_path)
+        except (ValueError, RuntimeError) as error:
+            flash(str(error), "error")
+            return redirect(url_for("words_page"))
+        except (OSError, UnicodeDecodeError) as error:
+            flash(f"파일을 읽지 못했습니다. ({error})", "error")
+            return redirect(url_for("words_page"))
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        flash("불러온 단어장을 초안으로 놓았습니다. 저장해야 파일에 반영됩니다.", "success")
+        return redirect(url_for("words_page"))
 
     # ---------- 설정 ----------
 
@@ -291,3 +400,23 @@ def _parse_settings(form, word_count: int) -> Settings:
         wrong_review_ratio=round(wrong_percent / 100, 4),
         default_question_count=question_count,
     )
+
+
+def _word_input_from_form(form) -> WordInput:
+    return WordInput(
+        english=form.get("english", ""),
+        pos=form.get("pos", ""),
+        meaning_text=form.get("meanings", ""),
+    )
+
+
+def _empty_form() -> dict:
+    return {"english": "", "pos": "명사", "meanings": ""}
+
+
+def _form_from_word(word) -> dict:
+    return {"english": word.english, "pos": word.pos, "meanings": " / ".join(word.meanings)}
+
+
+def _find_word_or_none(ctrl: StudyController, key: str):
+    return next((word for word in ctrl.words if word.key == key), None)

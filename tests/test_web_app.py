@@ -4,12 +4,14 @@
 # 파일 위치: tests/test_web_app.py
 
 import csv
+import io
 import json
 import os
 import tempfile
 import unittest
 
 from src.storage.json_store import load_progress
+from src.storage.word_csv import load_words
 from src.storage.history_csv import read_records
 from src.web.app import create_app
 from src.web.controller import StudyController, WebPaths
@@ -233,6 +235,89 @@ class ReportTest(WebTestBase):
         self.assertIn("저장 위치", text)
         self.assertIn("학습 일수: 1일", text)
         self.assertEqual(len(os.listdir(self.paths.reports_dir)), 1)
+
+
+class WordEditTest(WebTestBase):
+    """단어장 편집 (ADR-013): 초안 편집, 저장 확인, 백업, 취소, 불러오기, 진행 중 차단."""
+
+    def _file_word_count(self) -> int:
+        return len(load_words(self.paths.word_file).words)
+
+    def test_REQ001_add_changes_draft_only_until_saved(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.assertEqual(len(self.controller.words), 13)
+        self.assertTrue(self.controller.word_dirty)
+        self.assertEqual(self._file_word_count(), 12)
+
+    def test_REQ001_add_duplicate_shows_error_and_keeps_draft(self):
+        response = self.client.post("/words/new", data={"english": "APPLE", "pos": "명사", "meanings": "사과"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("이미 있는 단어", response.get_data(as_text=True))
+        self.assertEqual(len(self.controller.words), 12)
+
+    def test_REQ001_meaning_only_edit_saves_without_confirmation(self):
+        self.client.post("/words/apple/edit", data={"english": "apple", "pos": "명사", "meanings": "사과 / 열매"})
+        self.client.post("/words/save", data={})
+        self.assertFalse(self.controller.word_dirty)
+        self.assertEqual(load_words(self.paths.word_file).words[0].meanings, ["사과", "열매"])
+
+    def test_ADR013_layout_change_needs_confirmation_before_save(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.client.post("/words/save", data={})
+        self.assertEqual(self._file_word_count(), 12)
+        self.assertTrue(self.controller.word_dirty)
+
+        self.client.post("/words/save", data={"confirm_change": "1"})
+        self.assertEqual(self._file_word_count(), 13)
+        self.assertFalse(self.controller.word_dirty)
+
+    def test_ADR013_save_keeps_previous_file_as_backup(self):
+        self.client.post("/words/apple/delete", data={})
+        self.client.post("/words/save", data={"confirm_change": "1"})
+        self.assertTrue(os.path.exists(self.paths.word_file + ".bak"))
+        self.assertEqual(len(load_words(self.paths.word_file + ".bak").words), 12)
+
+    def test_ADR013_discard_restores_file_contents(self):
+        self.client.post("/words/book/delete", data={})
+        self.client.post("/words/discard", data={"confirm_discard": "1"})
+        self.assertEqual(len(self.controller.words), 12)
+        self.assertFalse(self.controller.word_dirty)
+
+    def test_ADR013_import_loads_draft_without_touching_file(self):
+        csv_bytes = "번호,영단어,품사,뜻\n1,ant,명사,개미\n2,bee,명사,벌\n".encode("utf-8")
+        response = self.client.post(
+            "/words/import",
+            data={"file": (io.BytesIO(csv_bytes), "new.csv")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual([word.english for word in self.controller.words], ["ant", "bee"])
+        self.assertTrue(self.controller.word_dirty)
+        self.assertEqual(self._file_word_count(), 12)
+
+    def test_ADR013_skipped_rows_warn_before_save(self):
+        with open(self.paths.word_file, "a", encoding="utf-8", newline="") as word_file:
+            word_file.write("13,,명사,빈칸\n")
+        self.controller = StudyController.load(self.paths)
+        self.app = create_app(self.paths, controller=self.controller)
+        client = self.app.test_client()
+
+        client.post("/words/apple/delete", data={})
+        client.post("/words/save", data={})
+        self.assertEqual(self._file_word_count(), 12)
+        client.post("/words/save", data={"confirm_change": "1"})
+        self.assertEqual(self._file_word_count(), 11)
+
+    def test_ADR013_editing_is_blocked_while_learning(self):
+        self.controller.start_memorize()
+        self.controller.memorize_reveal()
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.assertEqual(len(self.controller.words), 12)
+        self.assertFalse(self.controller.word_dirty)
+
+    def test_REQ001_dirty_banner_appears_on_other_pages(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.assertIn("저장하지 않은 단어 변경이 있습니다", self.client.get("/").get_data(as_text=True))
 
 
 if __name__ == "__main__":
