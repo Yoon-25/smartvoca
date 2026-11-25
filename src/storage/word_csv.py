@@ -5,6 +5,8 @@
 
 import csv
 import io
+import os
+import shutil
 from dataclasses import dataclass, field
 
 from src.models.word import Word
@@ -103,3 +105,19 @@ def save_words(path: str, words: list[Word]) -> None:
         writer.writerow([number, word.english, word.pos, meaning_text])
 
     atomic_write_text(path, buffer.getvalue())
+
+
+BACKUP_SUFFIX = ".bak"
+
+
+def save_words_with_backup(path: str, words: list[Word]) -> str | None:
+    """기존 파일을 '<원본>.bak'으로 복사해 둔 뒤 저장한다 (ADR-013).
+
+    기존 파일이 없으면 백업은 만들지 않고 None을 돌려준다. 있으면 백업 경로를 돌려준다.
+    """
+    backup_path = None
+    if os.path.exists(path):
+        backup_path = path + BACKUP_SUFFIX
+        shutil.copy2(path, backup_path)
+    save_words(path, words)
+    return backup_path
