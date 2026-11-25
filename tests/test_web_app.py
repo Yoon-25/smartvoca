@@ -320,5 +320,64 @@ class WordEditTest(WebTestBase):
         self.assertIn("저장하지 않은 단어 변경이 있습니다", self.client.get("/").get_data(as_text=True))
 
 
+class DraftProtectionTest(WebTestBase):
+    """저장하지 않은 웹 초안 보호 (이슈 #13, ADR-013): 자동 보관, 복원, 저장·취소 시 정리, 종료 경고."""
+
+    def _draft_path(self) -> str:
+        return self.paths.word_file + ".draft"
+
+    def _restart(self) -> "StudyController":
+        return StudyController.load(self.paths)
+
+    def test_ADR013_edit_autosaves_draft_file(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.assertTrue(os.path.exists(self._draft_path()))
+        self.assertEqual(len(load_words(self._draft_path()).words), 13)
+        self.assertEqual(len(load_words(self.paths.word_file).words), 12)
+
+    def test_ADR013_restart_restores_unsaved_draft(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        restarted = self._restart()
+        self.assertEqual(len(restarted.words), 13)
+        self.assertTrue(restarted.word_dirty)
+        self.assertTrue(restarted.draft_restored)
+        self.assertEqual(len(load_words(self.paths.word_file).words), 12)
+
+    def test_ADR013_restored_draft_keeps_layout_change_check(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        restarted = self._restart()
+        self.assertTrue(any("일차 구성" in warning for warning in restarted.word_save_warnings()))
+
+    def test_ADR013_save_removes_draft_file(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.client.post("/words/save", data={"confirm_change": "1"})
+        self.assertFalse(os.path.exists(self._draft_path()))
+        self.assertFalse(self._restart().word_dirty)
+
+    def test_ADR013_discard_removes_draft_file(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.client.post("/words/discard", data={"confirm_discard": "1"})
+        self.assertFalse(os.path.exists(self._draft_path()))
+        self.assertEqual(len(self.controller.words), 12)
+
+    def test_ADR013_restored_notice_is_shown(self):
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        client = create_app(self.paths, controller=self._restart()).test_client()
+        self.assertIn("복원했습니다", client.get("/words").get_data(as_text=True))
+
+    def test_ADR013_exit_message_only_when_unsaved(self):
+        self.assertIsNone(self.controller.unsaved_exit_message())
+        self.client.post("/words/new", data={"english": "zebra", "pos": "명사", "meanings": "얼룩말"})
+        self.assertIn("초안", self.controller.unsaved_exit_message())
+
+    def test_ADR013_corrupt_draft_is_ignored_with_message(self):
+        with open(self._draft_path(), "w", encoding="utf-8") as draft_file:
+            draft_file.write("틀린,헤더\n1,a,명사,뜻\n")
+        restarted = self._restart()
+        self.assertFalse(restarted.word_dirty)
+        self.assertEqual(len(restarted.words), 12)
+        self.assertIn("무시", restarted.load_error)
+
+
 if __name__ == "__main__":
     unittest.main()

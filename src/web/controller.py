@@ -3,6 +3,7 @@
 # 2026-11-25 - smartvoca - 웹 화면이 쓰는 학습 흐름: 홈 요약, 암기, 시험, 설정, 단어장, 보고서 (REQ-001~011)
 # 파일 위치: src/web/controller.py
 
+import os
 import random
 import threading
 from dataclasses import dataclass, field
@@ -38,7 +39,9 @@ from src.services.word_editor import (
     update_word,
     validate_word_input,
 )
-from src.storage.word_csv import WordFileError, load_words, save_words_with_backup
+from src.storage.word_csv import WordFileError, load_words, save_words, save_words_with_backup
+
+DRAFT_SUFFIX = ".draft"  # 저장하지 않은 초안 자동 보관 파일 (이슈 #13)
 
 NO_HISTORY_MESSAGE = "이력이 없습니다. 암기나 시험을 한 뒤 다시 시도하세요."
 VALID_DIRECTIONS = (DIRECTION_KO_EN, DIRECTION_EN_KO, DIRECTION_MIXED)
@@ -98,6 +101,8 @@ class StudyController:
         # 저장된 파일의 단어 키 순서. 초안과 비교해 일차 구성이 바뀌는지 판정한다 (ADR-013)
         self._saved_keys = [word.key for word in words]
         self._dirty = False  # 초안(메모리)에 저장하지 않은 변경이 있는지
+        self._draft_restored = False  # 이전 실행의 초안을 시작할 때 복원했는지
+        self.draft_error = ""  # 초안 자동 보관 실패 원인 (비어 있으면 정상)
         self._lock = threading.RLock()
 
     @classmethod
@@ -115,8 +120,10 @@ class StudyController:
 
         settings_result = load_settings(paths.settings_file)
         progress = load_progress(paths.progress_file)
-        return cls(paths, words, skipped, settings_result.settings, progress,
-                   warnings=settings_result.warnings, load_error=load_error)
+        controller = cls(paths, words, skipped, settings_result.settings, progress,
+                         warnings=settings_result.warnings, load_error=load_error)
+        controller._restore_draft()
+        return controller
 
     # ---------- 공통 조회 ----------
 
@@ -135,6 +142,14 @@ class StudyController:
     @property
     def word_file(self) -> str:
         return self._paths.word_file
+
+    @property
+    def draft_restored(self) -> bool:
+        return self._draft_restored
+
+    @property
+    def draft_path(self) -> str:
+        return self._paths.word_file + DRAFT_SUFFIX
 
     @property
     def settings(self) -> Settings:
@@ -304,6 +319,48 @@ class StudyController:
     # ---------- 단어장 편집 (ADR-013) ----------
     # 편집은 메모리의 초안에서 한다. 저장 버튼을 눌러야 파일에 쓴다.
 
+    def _restore_draft(self) -> None:
+        """이전 실행에서 자동 보관한 초안이 있으면 초안으로 복원한다 (이슈 #13).
+
+        저장된 키 순서는 단어장 파일 기준으로 유지한다. 그래야 일차 구성 변경 확인이 맞게 동작한다.
+        건너뛴 행은 단어장 파일의 것을 그대로 쓴다.
+        """
+        if not os.path.exists(self.draft_path):
+            return
+        try:
+            draft = load_words(self.draft_path)
+        except (WordFileError, OSError, UnicodeDecodeError) as error:
+            self.load_error = f"저장하지 않은 초안을 읽지 못해 무시했습니다: {error}"
+            return
+        self._words = draft.words
+        self._dirty = True
+        self._draft_restored = True
+
+    def _autosave_draft(self) -> None:
+        """초안을 보관 파일에 쓴다. 실패해도 편집은 유지하고 원인만 기록한다."""
+        try:
+            save_words(self.draft_path, self._words)
+        except OSError as error:
+            self.draft_error = str(error)
+        else:
+            self.draft_error = ""
+
+    def _remove_draft(self) -> None:
+        try:
+            if os.path.exists(self.draft_path):
+                os.remove(self.draft_path)
+            self.draft_error = ""
+        except OSError as error:
+            self.draft_error = str(error)
+
+    def unsaved_exit_message(self) -> str | None:
+        """프로그램을 끌 때 보여 줄 경고. 저장하지 않은 변경이 없으면 None."""
+        if not self._dirty:
+            return None
+        if self.draft_error:
+            return "저장하지 않은 단어 변경이 있고 자동 보관에도 실패했습니다. 다음 실행 전에 단어장에서 저장하세요."
+        return "저장하지 않은 단어 변경이 있습니다. 초안은 data 폴더에 보관되어 다음 실행 때 복원됩니다."
+
     def _ensure_words_editable(self) -> None:
         if self.in_progress():
             raise RuntimeError("진행 중인 학습을 끝낸 뒤 단어를 바꿔 주세요.")
@@ -316,6 +373,7 @@ class StudyController:
                 raise ValueError(" ".join(errors))
             self._words = add_word(self._words, data)
             self._dirty = True
+            self._autosave_draft()
 
     def update_word(self, key: str, data: WordInput) -> None:
         with self._lock:
@@ -327,6 +385,7 @@ class StudyController:
                 raise ValueError(" ".join(errors))
             self._words = update_word(self._words, key, data)
             self._dirty = True
+            self._autosave_draft()
 
     def delete_word(self, key: str) -> None:
         with self._lock:
@@ -335,6 +394,7 @@ class StudyController:
                 raise ValueError("단어를 찾을 수 없습니다.")
             self._words = delete_word(self._words, key)
             self._dirty = True
+            self._autosave_draft()
 
     def word_save_warnings(self) -> list[str]:
         """저장 전에 확인받을 사항. 비어 있으면 바로 저장해도 된다."""
@@ -357,6 +417,8 @@ class StudyController:
             self._saved_keys = [word.key for word in self._words]
             self._skipped = []
             self._dirty = False
+            self._draft_restored = False
+            self._remove_draft()
             return backup
 
     def discard_word_changes(self) -> None:
@@ -364,6 +426,8 @@ class StudyController:
         with self._lock:
             self._ensure_words_editable()
             self._reload_from(self._paths.word_file)
+            self._draft_restored = False
+            self._remove_draft()
 
     def import_words(self, path: str) -> None:
         """다른 CSV를 초안으로 읽는다. 파일에 저장하기 전까지는 바뀌지 않는다."""
@@ -376,6 +440,7 @@ class StudyController:
             self._words = result.words
             self._skipped = result.skipped
             self._dirty = True
+            self._autosave_draft()
 
     def _reload_from(self, path: str) -> None:
         result = load_words(path)

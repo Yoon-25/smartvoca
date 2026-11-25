@@ -35,6 +35,7 @@ def create_app(paths: WebPaths, controller: StudyController | None = None) -> Fl
     # 로컬 전용 앱이다. 플래시 메시지 서명용 키이며 매번 새로 만든다
     app.secret_key = secrets.token_hex(16)
     ctrl = controller or StudyController.load(paths)
+    app.config["CONTROLLER"] = ctrl  # 종료 경고 등 시작 스크립트가 쓴다
 
     @app.context_processor
     def inject_common():
@@ -183,6 +184,8 @@ def create_app(paths: WebPaths, controller: StudyController | None = None) -> Fl
             word_file=ctrl.word_file,
             load_error=ctrl.load_error,
             save_warnings=ctrl.word_save_warnings(),
+            draft_restored=ctrl.draft_restored,
+            draft_error=ctrl.draft_error,
         )
 
     @app.get("/words/new")
