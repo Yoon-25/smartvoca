@@ -16,9 +16,13 @@ data/progress.json
 data/settings.json
 data/reports/
 
+# 단어장 저장 시 자동 백업 (ADR-013). 원본 단어장은 커밋하되 백업은 커밋하지 않는다
+data/*.bak
+
 # 에디터·OS 잡파일
 .idea/
 .vscode/
 Thumbs.db
 desktop.ini
 ai-agent/claude/261118_ui점검/shots/
+ai-agent/claude/251125_웹디자인/shots/

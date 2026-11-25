@@ -89,9 +89,9 @@ smartvoca/
 ## 테스트 및 배포
 
 - 테스트 실행 방법 (프로젝트 루트):
-  - 전체: `python -m unittest discover -s tests -t .` (현재 132개, 화면 테스트는 offscreen으로 실행, 웹 테스트는 Flask test client)
+  - 전체: `python -m unittest discover -s tests -t .` (현재 160개, 화면 테스트는 offscreen으로 실행, 웹 테스트는 Flask test client)
   - 파일 하나: `python -m unittest tests.test_quiz`
-  - 테스트 ID와 요구사항 매핑: `docs/VocaFlashcard_Test_Specification_v1.1_261125.md`
+  - 테스트 ID와 요구사항 매핑: `docs/VocaFlashcard_Test_Specification_v1.2_261125.md`
 - 실행 방식: 데스크톱 `python -m src.main` (PyQt6 설치 필요: `pip install PyQt6`, 설치 전 승인 필요). 웹 `python -m src.web` (Flask 설치 필요: `pip install -r requirements.txt`). 데스크톱과 웹을 동시에 실행하지 않는다 (같은 `data/` 파일을 씀)
 - 배포: 아직 없음. 개인 PC에서 직접 실행한다.
 - 학습 데이터(`data/settings.json`, `progress.json`, `study_history.csv`, `reports/`)는 .gitignore에 있다. 커밋하지 않는다.
