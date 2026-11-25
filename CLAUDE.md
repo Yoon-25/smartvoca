@@ -7,7 +7,7 @@
 - **한 줄 설명**: 2,000개 영단어를 일차별로 암기하고 시험으로 확인하는 1인용 Windows 데스크톱 프로그램
 - **작성자**: 미정
 - **리포지토리**: `https://github.com/Yoon-25/smartvoca` (private, `main`)
-- **상태**: 구현 1~6단계와 설정·단축 키 등 추가 기능 완료. 열린 이슈 없음 (2026-11-18). 다음 작업 안내는 `ai-agent/claude/작업계획_261104_다음작업.md` 참조
+- **상태**: 구현 1~6단계와 설정·단축 키 등 추가 기능 완료. 웹 버전(Flask, 로컬 실행) 추가 (2026-11-25, ADR-012). 다음 작업 안내는 `ai-agent/claude/작업계획_261104_다음작업.md` 참조
 
 ### 기술 스택
 
@@ -16,10 +16,10 @@
 | 레이어 | 기술 |
 |--------|------|
 | 언어 | Python 3.11 |
-| 주요 라이브러리 | PyQt6 6.12 (GUI), 표준 라이브러리만 사용 (csv, json, unittest) |
+| 주요 라이브러리 | PyQt6 6.12 (데스크톱 GUI), Flask 3.x (웹 버전, ADR-012), 표준 라이브러리 (csv, json, unittest) |
 | 프론트엔드 | PyQt6 데스크톱 화면 (QStackedWidget 기반 단일 창) |
 | DB | 없음. CSV(단어장, 이력)와 JSON(설정, 진도) 파일 저장 |
-| 실행 환경 | Windows 11, 프로젝트 루트에서 `python -m src.main` |
+| 실행 환경 | Windows 11, 프로젝트 루트에서 `python -m src.main` (데스크톱) 또는 `python -m src.web` (웹, http://127.0.0.1:5000) |
 
 ## 상위 정책 참조
 
@@ -89,10 +89,10 @@ smartvoca/
 ## 테스트 및 배포
 
 - 테스트 실행 방법 (프로젝트 루트):
-  - 전체: `python -m unittest discover -s tests -t .` (현재 112개, 화면 테스트는 offscreen으로 실행)
+  - 전체: `python -m unittest discover -s tests -t .` (현재 132개, 화면 테스트는 offscreen으로 실행, 웹 테스트는 Flask test client)
   - 파일 하나: `python -m unittest tests.test_quiz`
-  - 테스트 ID와 요구사항 매핑: `docs/VocaFlashcard_Test_Specification_v1.0_261118.md`
-- 실행 방식: `python -m src.main` (PyQt6 설치 필요: `pip install PyQt6`, 설치 전 승인 필요)
+  - 테스트 ID와 요구사항 매핑: `docs/VocaFlashcard_Test_Specification_v1.1_261125.md`
+- 실행 방식: 데스크톱 `python -m src.main` (PyQt6 설치 필요: `pip install PyQt6`, 설치 전 승인 필요). 웹 `python -m src.web` (Flask 설치 필요: `pip install -r requirements.txt`). 데스크톱과 웹을 동시에 실행하지 않는다 (같은 `data/` 파일을 씀)
 - 배포: 아직 없음. 개인 PC에서 직접 실행한다.
 - 학습 데이터(`data/settings.json`, `progress.json`, `study_history.csv`, `reports/`)는 .gitignore에 있다. 커밋하지 않는다.
 - 알려진 함정:
