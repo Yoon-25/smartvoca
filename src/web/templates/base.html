@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}스마트 보카{% endblock %}</title>
+  <style>
+    body { font-family: "Malgun Gothic", "맑은 고딕", sans-serif; margin: 0; background: #f5f6f8; color: #222; }
+    header { background: #2f5d8a; padding: 0 24px; }
+    nav { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+    nav a { color: #fff; text-decoration: none; padding: 12px 14px; border-radius: 4px; }
+    nav a:hover, nav a.active { background: #244a6e; }
+    nav .spacer { flex: 1; }
+    main { max-width: 820px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+    .flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
+    .flash.error { background: #fde8ec; color: #b00020; }
+    .flash.success { background: #e6f4ea; color: #1b7f3b; }
+    .flash.info { background: #e8f0fb; color: #1d4e89; }
+    .muted { color: #666; font-size: 14px; }
+    .big { font-size: 36px; font-weight: bold; text-align: center; margin: 24px 0 8px; }
+    .meaning { font-size: 22px; text-align: center; min-height: 32px; }
+    .center { text-align: center; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 16px; }
+    button, .button { background: #2f5d8a; color: #fff; border: 0; border-radius: 6px; padding: 10px 18px; font-size: 15px; cursor: pointer; text-decoration: none; display: inline-block; }
+    button.secondary { background: #6b7785; }
+    button.danger { background: #b00020; }
+    button:disabled { background: #b8c0ca; cursor: not-allowed; }
+    input[type=text], input[type=number], select { padding: 8px; font-size: 16px; border: 1px solid #bbb; border-radius: 4px; }
+    input[type=text].answer { width: 100%; box-sizing: border-box; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e3e6ea; }
+    th { background: #eef2f6; }
+    .feedback-ok { color: #1b7f3b; font-size: 16px; font-weight: bold; }
+    .feedback-ng { color: #b00020; font-size: 16px; font-weight: bold; }
+    pre { background: #f2f4f7; padding: 14px; border-radius: 6px; white-space: pre-wrap; }
+    .choice { display: block; padding: 8px 0; font-size: 17px; }
+    .form-row { margin: 12px 0; }
+    .form-row label { display: inline-block; min-width: 180px; }
+  </style>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="{{ url_for('home') }}">홈</a>
+    <a href="{{ url_for('memorize_page') }}">암기</a>
+    <a href="{{ url_for('quiz_setup_page') }}">시험</a>
+    <a href="{{ url_for('words_page') }}">단어장</a>
+    <a href="{{ url_for('report_page') }}">보고서</a>
+    <span class="spacer"></span>
+    <a href="{{ url_for('settings_page') }}">설정 ⚙</a>
+  </nav>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

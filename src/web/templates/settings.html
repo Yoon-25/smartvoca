@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>설정</h2>
+  {% if in_progress %}
+    <p class="flash info">진행 중인 학습이 있어 지금은 설정을 바꿀 수 없습니다. 학습을 끝낸 뒤 바꿔 주세요.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('settings_save') }}">
+    <div class="form-row">
+      <label for="words_per_day">하루 단어 수 ({{ ranges.words_per_day[0] }} ~ {{ ranges.words_per_day[1] }})</label>
+      <input type="number" id="words_per_day" name="words_per_day" min="{{ ranges.words_per_day[0] }}" max="{{ ranges.words_per_day[1] }}" value="{{ values.words_per_day }}" {% if in_progress %}disabled{% endif %}>
+    </div>
+    <div class="form-row">
+      <label for="prev_review_percent">전날 복습 비율 (%, 0 ~ {{ ranges.ratio_percent[1] }})</label>
+      <input type="number" step="any" id="prev_review_percent" name="prev_review_percent" min="0" max="{{ ranges.ratio_percent[1] }}" value="{{ values.prev_review_percent }}" {% if in_progress %}disabled{% endif %}>
+    </div>
+    <div class="form-row">
+      <label for="wrong_review_percent">오답 복습 비율 (%, 0 ~ {{ ranges.ratio_percent[1] }})</label>
+      <input type="number" step="any" id="wrong_review_percent" name="wrong_review_percent" min="0" max="{{ ranges.ratio_percent[1] }}" value="{{ values.wrong_review_percent }}" {% if in_progress %}disabled{% endif %}>
+    </div>
+    <div class="form-row">
+      <label for="default_question_count">기본 문제 수 (1 ~ {{ ranges.question_count[1] }})</label>
+      <input type="number" id="default_question_count" name="default_question_count" min="1" max="{{ ranges.question_count[1] }}" value="{{ values.default_question_count }}" {% if in_progress %}disabled{% endif %}>
+    </div>
+    <div class="form-row">
+      <label><input type="checkbox" name="confirm_change" value="1"> 하루 단어 수를 바꾸면 일차 구성이 바뀐다는 점을 확인했습니다</label>
+    </div>
+    <p class="muted">진도(현재 일차)와 이력은 설정을 바꿔도 그대로 유지됩니다 (ADR-011).</p>
+    <div class="row">
+      <span></span>
+      <button type="submit" {% if in_progress %}disabled{% endif %}>저장</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

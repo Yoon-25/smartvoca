@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>시험 결과</h2>
+  <p style="font-size:24px; font-weight:bold;">{{ session.score_text }}</p>
+  <p>틀린 단어: {{ session.wrong_words|join(', ') if session.wrong_words else '없음' }}</p>
+  <div class="row">
+    <a class="button secondary" href="{{ url_for('home') }}">홈으로</a>
+    <form method="post" action="{{ url_for('quiz_retry') }}">
+      <button type="submit">다시 시험</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

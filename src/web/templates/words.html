@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>단어장</h2>
+  <p class="muted">파일: {{ word_file }} · 단어 {{ total }}개 (읽기 전용: 웹에서는 단어장을 바꾸지 않습니다)</p>
+  {% if load_error %}<div class="flash error">{{ load_error }}</div>{% endif %}
+  <form method="get" action="{{ url_for('words_page') }}" class="row">
+    <input type="text" name="q" value="{{ query }}" placeholder="영단어 또는 뜻 검색">
+    <button type="submit">검색</button>
+  </form>
+  <p class="muted">{% if query %}검색 결과 {{ words|length }}개{% else %}전체 {{ words|length }}개{% endif %}</p>
+  <table>
+    <thead><tr><th>번호</th><th>영단어</th><th>품사</th><th>뜻</th></tr></thead>
+    <tbody>
+    {% for word in words %}
+      <tr><td>{{ word.index + 1 }}</td><td>{{ word.english }}</td><td>{{ word.pos }}</td><td>{{ word.meanings|join(' / ') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if skipped %}
+<div class="card">
+  <h3>건너뛴 행 ({{ skipped|length }}개)</h3>
+  <table>
+    <thead><tr><th>줄 번호</th><th>사유</th></tr></thead>
+    <tbody>
+    {% for skip in skipped %}
+      <tr><td>{{ skip.line_no }}</td><td>{{ skip.reason }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

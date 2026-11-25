@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+{% set question = session.current %}
+{% set total = session.questions|length %}
+<div class="card">
+  <div class="row">
+    <strong>문제 {{ session.position + 1 }} / {{ total }}</strong>
+    <span class="muted">[{{ question.direction }}]</span>
+  </div>
+  <div class="big" style="font-size:28px;">{{ question.prompt }}</div>
+
+  {% if not session.is_submitted %}
+    <form method="post" action="{{ url_for('quiz_submit') }}">
+      {% if question.qtype == '4지선다' %}
+        {% for choice in question.choices %}
+          <label class="choice"><input type="radio" name="choice" value="{{ loop.index0 }}" required> {{ loop.index }}. {{ choice }}</label>
+        {% endfor %}
+        <div class="row"><span></span><button type="submit">제출</button></div>
+      {% elif question.qtype == 'OX' %}
+        <div class="row">
+          <button type="submit" name="answer" value="O">O</button>
+          <button type="submit" name="answer" value="X" class="secondary">X</button>
+        </div>
+      {% else %}
+        <input type="text" name="answer" class="answer" autofocus placeholder="영단어 또는 뜻을 입력하세요" autocomplete="off">
+        <div class="row"><span></span><button type="submit">제출</button></div>
+      {% endif %}
+    </form>
+  {% else %}
+    {% if result %}
+      <p class="{{ 'feedback-ok' if result.is_correct else 'feedback-ng' }}">{{ result.message }}</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('quiz_next') }}">
+      <div class="row">
+        <span></span>
+        <button type="submit">{% if session.is_last %}결과 보기{% else %}다음 문제{% endif %}</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+<form method="post" action="{{ url_for('quiz_abandon') }}" class="center"
+      onsubmit="return confirm('시험을 그만두면 진행 상황이 사라집니다. 계속할까요?');">
+  <button type="submit" class="danger">시험 그만두기</button>
+</form>
+{% endblock %}

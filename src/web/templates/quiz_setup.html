@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>시험 설정</h2>
+  {% if quiz_in_progress %}
+    <p class="flash info">진행 중인 시험이 있습니다. 새로 시작하면 기존 시험은 사라집니다.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('quiz_start') }}"
+        {% if quiz_in_progress %}onsubmit="return confirm('진행 중인 시험을 버리고 새로 시작할까요?');"{% endif %}>
+    <div class="form-row">
+      <label for="count">문제 수 (1 ~ {{ word_count }})</label>
+      <input type="number" id="count" name="count" min="1" max="{{ word_count }}" value="{{ default_count }}" required>
+    </div>
+    <div class="form-row">
+      <label>출제 방향</label>
+      {% for direction in directions %}
+        <label><input type="radio" name="direction" value="{{ direction }}" {% if loop.first %}checked{% endif %}> {{ direction }}</label>
+      {% endfor %}
+    </div>
+    <div class="form-row">
+      <label>문제 유형</label>
+      {% for qtype in types %}
+        <label><input type="checkbox" name="types" value="{{ qtype }}" {% if qtype == '단답형' %}checked{% endif %}> {{ qtype }}</label>
+      {% endfor %}
+    </div>
+    <div class="row">
+      <a class="button secondary" href="{{ url_for('home') }}">취소</a>
+      <button type="submit">시험 시작</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

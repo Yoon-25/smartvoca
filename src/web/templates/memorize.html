@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+{% if session is none %}
+  <div class="card">
+    <p>진행 중인 암기가 없습니다.</p>
+    {% if info.day == 0 %}
+      <p class="muted">단어장이 비어 있습니다.</p>
+    {% else %}
+      <form method="post" action="{{ url_for('memorize_start') }}">
+        <button type="submit">{{ info.day }}일차 암기 시작</button>
+      </form>
+    {% endif %}
+  </div>
+{% else %}
+  {% set card = session.current %}
+  <div class="card">
+    <div class="row">
+      <strong>{{ session.day }}일차 암기</strong>
+      <span class="muted">{% if card %}카드 {{ session.position + 1 }} / {{ session.cards|length }}{% else %}카드 없음{% endif %}</span>
+    </div>
+
+    {% if card is none %}
+      <p class="center">이 일차에 암기할 단어가 없습니다.</p>
+      <form method="post" action="{{ url_for('memorize_abandon') }}" class="center">
+        <button type="submit" class="secondary">나가기</button>
+      </form>
+    {% else %}
+      {% set revealed = session.is_revealed() %}
+      <div class="big">{{ card.word.english }}</div>
+      <div class="meaning">{{ card.word.meanings|join('  ·  ') if revealed else '' }}</div>
+      <p class="center muted">{% if card.kind != '신규' %}[{{ card.kind }}]{% endif %}</p>
+
+      <div class="row">
+        <form method="post" action="{{ url_for('memorize_previous') }}" id="prev-form">
+          <button type="submit" class="secondary" {% if session.is_first %}disabled{% endif %}>← 이전</button>
+        </form>
+        <form method="post" action="{{ url_for('memorize_reveal') }}" id="reveal-form">
+          <button type="submit" {% if revealed %}disabled{% endif %}>뜻 보기 (스페이스)</button>
+        </form>
+        <form method="post" action="{{ url_for('memorize_next') }}" id="next-form">
+          <button type="submit">{% if session.is_last %}완료{% else %}다음 →{% endif %}</button>
+        </form>
+      </div>
+      <p class="muted center">단축 키: 스페이스 = 뜻 보기, ← → = 이전·다음 (마지막 카드의 완료는 버튼으로만)</p>
+    {% endif %}
+  </div>
+  <form method="post" action="{{ url_for('memorize_abandon') }}" class="center"
+        onsubmit="return confirm('암기를 그만두면 진행 상황이 사라집니다. 계속할까요? (진도는 바뀌지 않습니다)');">
+    <button type="submit" class="danger">암기 그만두기</button>
+  </form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if session is not none and session.current is not none %}
+<script>
+  // 단축 키 (UI 설계서 11장): 스페이스 = 뜻 보기, 좌·우 = 이전·다음
+  // 방향키로는 마지막 카드에서 완료하지 않는다
+  document.addEventListener('keydown', function (event) {
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
+    if (event.key === ' ') {
+      var reveal = document.getElementById('reveal-form');
+      var button = reveal && reveal.querySelector('button');
+      if (button && !button.disabled) { event.preventDefault(); reveal.submit(); }
+    } else if (event.key === 'ArrowLeft') {
+      var prev = document.getElementById('prev-form');
+      var prevButton = prev && prev.querySelector('button');
+      if (prevButton && !prevButton.disabled) { prev.submit(); }
+    } else if (event.key === 'ArrowRight') {
+      if (!{{ 'true' if session.is_last else 'false' }}) { document.getElementById('next-form').submit(); }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}
