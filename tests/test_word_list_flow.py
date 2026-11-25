@@ -104,7 +104,7 @@ class WordListViewTest(unittest.TestCase):
 
         with mock.patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(path, "")), \
                 mock.patch.object(QtWidgets.QMessageBox, "information"):
-            view._on_save_clicked()
+            view._on_save_as_clicked()
 
         reloaded = load_words(path).words
         self.assertEqual([(w.english, w.pos, w.meanings) for w in reloaded],
@@ -116,9 +116,9 @@ class WordListViewTest(unittest.TestCase):
         path = self.write_csv("keep.csv", "1,keep,명사,유지\n")
 
         with mock.patch.object(QtWidgets.QFileDialog, "getSaveFileName", return_value=(path, "")), \
-                mock.patch("src.ui.word_list_view.save_words", side_effect=OSError("disk full")), \
+                mock.patch("src.ui.word_list_view.save_words_with_backup", side_effect=OSError("disk full")), \
                 mock.patch.object(QtWidgets.QMessageBox, "warning") as warning:
-            view._on_save_clicked()
+            view._on_save_as_clicked()
 
         warning.assert_called_once()
         self.assertEqual(load_words(path).words[0].english, "keep")

@@ -68,7 +68,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stack.addWidget(self._build_home())
         self._setup_view = self._create_setup_view()
         self._stack.addWidget(self._setup_view)
-        self._word_list_view = WordListView(self._words, self._skipped, self._word_file_path)
+        self._word_list_view = WordListView(
+            self._words, self._skipped, self._word_file_path, busy_check=self._is_in_progress,
+        )
         self._word_list_view.words_loaded.connect(self._on_words_loaded)
         self._stack.addWidget(self._word_list_view)
         self._report_view = ReportView()
@@ -384,7 +386,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         # 진행 중인 학습이 있으면 창 닫기도 확인한다
-        if self._confirm_leave():
-            event.accept()
-        else:
+        if not self._confirm_leave():
             event.ignore()
+            return
+        # 저장하지 않은 단어 변경은 창을 닫으면 사라진다 (ADR-013)
+        if self._word_list_view.has_unsaved_changes():
+            answer = QtWidgets.QMessageBox.question(
+                self, "확인", "저장하지 않은 단어 변경이 있습니다. 닫으면 사라집니다. 닫을까요?"
+            )
+            if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        event.accept()
