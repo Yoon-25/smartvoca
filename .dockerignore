@@ -1,0 +1,25 @@
+# 이미지에 넣지 않는 것 (Dockerfile은 src와 단어장 시드만 복사한다)
+.git
+.github
+.gitattributes
+.gitignore
+ai-agent
+docs
+tests
+CLAUDE.md
+README.md
+**/__pycache__
+*.pyc
+*.bak
+*.draft
+*.lock
+*.zip
+.env
+.env.*
+.venv
+venv
+node_modules
+
+# 개인 학습 데이터는 이미지에 넣지 않는다. 단어장 시드만 예외로 둔다
+data/*
+!data/voca_2000.csv

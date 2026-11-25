@@ -29,11 +29,12 @@ DIRECTION_OPTIONS = [DIRECTION_KO_EN, DIRECTION_EN_KO, DIRECTION_MIXED]
 TYPE_OPTIONS = [TYPE_SHORT, TYPE_CHOICE, TYPE_OX]
 
 
-def create_app(paths: WebPaths, controller: StudyController | None = None) -> Flask:
+def create_app(paths: WebPaths, controller: StudyController | None = None,
+               secret_key: str | None = None) -> Flask:
     """웹 앱을 만든다. controller를 주입하면 테스트에서 임시 파일 경로를 쓸 수 있다."""
     app = Flask(__name__)
-    # 로컬 전용 앱이다. 플래시 메시지 서명용 키이며 매번 새로 만든다
-    app.secret_key = secrets.token_hex(16)
+    # 배포에서는 환경변수로 받은 고정 키를 쓴다. 로컬 실행은 매번 새로 만든다
+    app.secret_key = secret_key or secrets.token_hex(16)
     ctrl = controller or StudyController.load(paths)
     app.config["CONTROLLER"] = ctrl  # 종료 경고 등 시작 스크립트가 쓴다
 

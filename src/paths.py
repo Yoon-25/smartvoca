@@ -7,7 +7,8 @@ import os
 
 # 경로 상수는 이 파일에만 둔다 (아키텍처 설계서 6.3절)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+# 배포 환경(컨테이너)에서는 DATA_DIR 환경변수로 영속 볼륨 경로를 준다 (과제 배포 요건)
+DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(BASE_DIR, "data")
 WORD_FILE = os.path.join(DATA_DIR, "voca_2000.csv")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
