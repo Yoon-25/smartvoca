@@ -8,7 +8,8 @@ import sys
 
 from PyQt6 import QtWidgets
 
-from src.paths import HISTORY_FILE, PROGRESS_FILE, REPORTS_DIR, SETTINGS_FILE, WORD_FILE
+from src.paths import DATA_DIR, HISTORY_FILE, PROGRESS_FILE, REPORTS_DIR, SETTINGS_FILE, WORD_FILE
+from src.storage.instance_lock import AlreadyRunningError, InstanceLock
 from src.storage.json_store import load_progress, load_settings
 from src.storage.word_csv import WordFileError, load_words
 from src.ui.main_window import MainWindow
@@ -19,6 +20,20 @@ SKIP_PREVIEW_COUNT = 5
 def main() -> int:
     app = QtWidgets.QApplication(sys.argv)
 
+    # 데스크톱과 웹은 같은 데이터를 쓰므로 동시에 실행하지 않는다 (이슈 #14, ADR-012)
+    lock = InstanceLock(DATA_DIR, "데스크톱 버전")
+    try:
+        lock.acquire()
+    except AlreadyRunningError as error:
+        QtWidgets.QMessageBox.warning(None, "이미 실행 중", str(error))
+        return 1
+    try:
+        return _run_app(app)
+    finally:
+        lock.release()
+
+
+def _run_app(app) -> int:
     settings_result = load_settings(SETTINGS_FILE)
     if settings_result.warnings:
         QtWidgets.QMessageBox.warning(None, "설정 경고", "\n".join(settings_result.warnings))
