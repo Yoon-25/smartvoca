@@ -4,7 +4,7 @@
 **작성일**: 2026-10-21
 **버전**: v1.4 (승인, 2026-11-25, 단어장 편집 반영: 4·6.2·10·11절 갱신, ADR-013)
 **설명**: 프로그램의 계층, 모듈 구성, 기능 분해(Function Map), 모듈 간 인터페이스를 정의한다.
-**기준 문서**: `VocaFlashcard_Requirement_Spec_v1.1_261021.md` (이하 명세서), `VocaFlashcard_Decision_Records_v1.1_261021.md` (이하 ADR)
+**기준 문서**: `VocaFlashcard_Requirement_Spec_v1.2_261125.md` (이하 명세서), `VocaFlashcard_Decision_Records_v1.6_261125.md` (이하 ADR)
 
 > **테일러링 메모**: 1인 학습용 단일 프로세스 데스크톱 프로그램이므로 방법론의 `Function Map`과 `Integration Spec`은 이 문서에 합쳤다. 파일 형식(CSV, JSON)의 전문 규격은 `Data Design`에 둔다.
 
